@@ -172,7 +172,7 @@
               title="Click 'Subscribe Free' to open the signup page."
             />
             <a 
-              href="YOUR_NEWSLETTER_LINK_HERE" 
+              href="https://techsolvelab.com/subscribe" 
               target="_blank"
               rel="noopener noreferrer"
               class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors whitespace-nowrap text-base flex-shrink-0"

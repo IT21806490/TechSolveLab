@@ -14,12 +14,14 @@ export default defineNuxtConfig({
     },
   },
 
+  ssr: false,
+
   nitro: {
     preset: "github_pages",
   },
 
   app: {
-    baseURL: "/TechSolveLab/",  // MUST match your GitHub repo name
+    baseURL: "/TechSolveLab/",  // Must match repo name exactly
     buildAssetsDir: "assets",
   }
 });

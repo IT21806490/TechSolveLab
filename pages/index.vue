@@ -13,7 +13,7 @@
             In-Depth Blog Posts • Quick Fixes • Expert Tech Guides • Gadget Reviews
           </p>
           <p class="text-lg md:text-xl mb-10 max-w-2xl mx-auto text-blue-100">
-            Join 50,000+ readers learning practical tech skills and staying informed
+            Join 5000+ readers learning practical tech skills and staying informed
           </p>
           <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <NuxtLink 
@@ -22,7 +22,7 @@
               Browse All Blog Posts →
             </NuxtLink>
             <NuxtLink 
-              to="/subscribe"
+              to="#"
               class="px-8 py-4 bg-transparent border-2 border-white text-white font-bold rounded-lg hover:bg-white hover:text-blue-600 transition-all duration-300 text-lg">
               Get Weekly Tips 📧
             </NuxtLink>
@@ -31,11 +31,11 @@
         
         <div class="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           <div>
-            <div class="text-3xl font-bold">500+</div>
+            <div class="text-3xl font-bold">50+</div>
             <div class="text-blue-200 text-sm">Blog Posts</div>
           </div>
           <div>
-            <div class="text-3xl font-bold">50K+</div>
+            <div class="text-3xl font-bold">5K+</div>
             <div class="text-blue-200 text-sm">Readers</div>
           </div>
           <div>
@@ -105,7 +105,7 @@
     <section class="max-w-6xl mx-auto mt-24 px-6 mb-20">
       <h2 class="text-4xl font-bold text-center mb-4 text-gray-900">Why Readers Choose TechSolveLab</h2>
       <p class="text-center text-gray-600 mb-12 text-lg max-w-2xl mx-auto">
-        **Quality content** that helps you understand the latest tech, solve real-world problems, and stay informed.
+        Quality content that helps you understand the latest tech, solve real-world problems, and stay informed.
       </p>
       
       <div class="grid md:grid-cols-3 gap-8">
@@ -151,7 +151,7 @@
       <div class="max-w-4xl mx-auto text-center text-white">
         <h2 class="text-4xl font-bold mb-4">Never Miss an Update</h2>
         <p class="text-xl mb-8 text-blue-100">
-          Get weekly **blog posts**, tips, and tech news delivered directly to your inbox.
+          Get weekly blog posts, tips, and tech news delivered directly to your inbox.
         </p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
           <input 
@@ -197,19 +197,19 @@ useHead({
 const featuredTopics = [
     { 
         name: 'Artificial Intelligence', 
-        link: '/category/ai', 
+        link: '#', 
         icon: '🤖',
         description: 'Explore the latest in AI tools, productivity apps, and machine learning trends.',
     },
     { 
         name: 'Cybersecurity & Privacy', 
-        link: '/category/cybersecurity', 
+        link: '#', 
         icon: '🔒',
         description: 'Stay safe online with guides on privacy, data protection, and essential security tools.',
     },
     { 
         name: 'Gadget Reviews & Guides', 
-        link: '/category/gadgets', 
+        link: '#', 
         icon: '📱',
         description: 'In-depth reviews and buyer guides for the best new smartphones, laptops, and wearables.',
     }

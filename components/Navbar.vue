@@ -2,14 +2,17 @@
   <nav class="bg-white shadow-md fixed w-full z-50 top-0">
     <div class="max-w-6xl mx-auto px-4">
       <div class="flex justify-between items-center py-4">
+        
         <!-- Logo -->
         <NuxtLink
           to="/"
           class="flex items-center space-x-2 text-3xl font-extrabold text-gray-900 hover:text-blue-600 transition-colors"
         >
-          <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-          </svg>
+          <img 
+            src="/images/techsolve_logo4.png" 
+            alt="TechSolveLab Logo" 
+            class="h-10 w-auto"
+          />
           <span>TechSolveLab</span>
         </NuxtLink>
 
@@ -32,7 +35,7 @@
           </NuxtLink>
           
           <NuxtLink
-            to="/subscribe"
+            to="#"
             class="ml-4 px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors"
           >
             Subscribe

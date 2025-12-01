@@ -13,7 +13,7 @@
             to="/blog"
             class="text-blue-200 hover:text-white transition-colors flex items-center text-sm"
           >
-            ← Back to Tutorials
+            ← Back to Blogs
           </NuxtLink>
           <span class="text-blue-200">•</span>
           <span
@@ -58,7 +58,7 @@
 
               <h2 class="text-2xl font-bold mt-8 mb-4">Top 15 AI Tools Replacing Traditional Apps</h2>
 
-              <ol class="list-decimal list-inside space-y-6">
+              <ol class="list-inside space-y-6">
                 <li>
                   <h3 class="text-lg font-semibold text-blue-700">1. ChatGPT Enterprise</h3>
                   <p class="ml-4 text-gray-700">Replaces basic customer support platforms and knowledge-base workflows with AI agents, summaries, and automated tickets.</p>

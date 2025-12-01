@@ -87,9 +87,9 @@
               </NuxtLink>
             </li>
             <li>
-              <NuxtLink to="/subscribe" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
+              <!-- <NuxtLink to="/subscribe" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
                 Newsletter
-              </NuxtLink>
+              </NuxtLink> -->
             </li>
           </ul>
         </div>
@@ -98,27 +98,27 @@
           <h4 class="text-lg font-bold text-gray-900 mb-5 border-b-2 border-blue-600 w-1/2 pb-1">Topics</h4>
           <ul class="space-y-3">
             <li>
-              <NuxtLink to="/category/ai" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
+              <NuxtLink to="/posts/top-15-ai-tools-2025" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
                 AI & Machine Learning
               </NuxtLink>
             </li>
             <li>
-              <NuxtLink to="/category/cybersecurity" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
+              <NuxtLink to="/posts/cybersecurity-tools-2025" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
                 Cybersecurity
               </NuxtLink>
             </li>
             <li>
-              <NuxtLink to="/category/gadgets" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
+              <NuxtLink to="/posts/smart-home-gadgets-2025" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
                 Gadgets & Reviews
               </NuxtLink>
             </li>
             <li>
-              <NuxtLink to="/category/software" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
+              <NuxtLink to="/posts/top-10-ai-productivity-apps" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
                 Software & Apps
               </NuxtLink>
             </li>
             <li>
-              <NuxtLink to="/category/connectivity" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
+              <NuxtLink to="/posts/5g-devices-2025" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
                 Connectivity & 5G
               </NuxtLink>
             </li>
@@ -143,7 +143,7 @@
                 Cookie Policy
               </NuxtLink>
             </li>
-            <li>
+            <!-- <li>
               <NuxtLink to="/dmca" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
                 DMCA Policy
               </NuxtLink>
@@ -152,7 +152,7 @@
               <a href="/sitemap.xml" class="text-gray-600 hover:text-blue-600 transition-colors text-base">
                 Sitemap
               </a>
-            </li>
+            </li> -->
           </ul>
         </div>
       </div>
@@ -172,7 +172,7 @@
               title="Click 'Subscribe Free' to open the signup page."
             />
             <a 
-              href="https://techsolvelab.com/subscribe" 
+              href="#" 
               target="_blank"
               rel="noopener noreferrer"
               class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors whitespace-nowrap text-base flex-shrink-0"

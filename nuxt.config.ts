@@ -17,11 +17,11 @@ export default defineNuxtConfig({
   ssr: false,
 
   nitro: {
-    preset: "github_pages",
+    preset: "github_pages", // Preset for GitHub Pages
   },
 
   app: {
-    baseURL: "/TechSolveLab/",  // Must match repo name exactly
-    buildAssetsDir: "assets",
-  }
+    baseURL: "/",  
+    buildAssetsDir: "assets", 
+  },
 });

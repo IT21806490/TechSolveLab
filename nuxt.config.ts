@@ -20,8 +20,12 @@ export default defineNuxtConfig({
     preset: "github_pages", // Preset for GitHub Pages
   },
 
-  app: {
-    baseURL: "/",  
-    buildAssetsDir: "assets", 
+app: {
+    baseURL: "/", 
+    buildAssetsDir: "_nuxt/",
+    head: {
+      title: "techsolvelab.com",
+      link: [{ rel: "icon", type: "image/png", href: "/favicon.png" }],
+    },
   },
 });

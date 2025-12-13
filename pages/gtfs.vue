@@ -1,12 +1,17 @@
 <template>
-  <div class="container">
-    <h1>GTFS Frequencies Generator</h1>
+  <div class="container mx-auto max-w-3xl p-4 font-sans">
+    <h1 class="text-2xl font-bold mb-6">GTFS Frequencies Generator</h1>
 
     <!-- File Upload -->
-    <input type="file" accept=".csv" @change="handleFile" class="mb-4 p-2 border rounded" />
+    <input
+      type="file"
+      accept=".csv"
+      @change="handleFile"
+      class="mb-4 p-2 border rounded w-full"
+    />
 
     <!-- Exact Times Input -->
-    <div v-if="frequencies.length" class="mb-4">
+    <div v-if="frequencies.length" class="mb-6">
       <label class="block mb-1 font-semibold">Set exact_times for all rows:</label>
       <input
         type="number"
@@ -17,31 +22,36 @@
     </div>
 
     <!-- Warnings -->
-    <div v-if="warnings.length">
-      <h3>Warnings:</h3>
-      <ul>
-        <li v-for="(w, i) in warnings" :key="i" style="color: orange">{{ w }}</li>
+    <div v-if="warnings.length" class="mb-4">
+      <h3 class="text-orange-600 font-semibold mb-2">Warnings:</h3>
+      <ul class="list-disc list-inside text-orange-600">
+        <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
       </ul>
     </div>
 
     <!-- Frequencies Table -->
-    <table v-if="frequencies.length" border="1" cellpadding="5" cellspacing="0" class="mt-4 w-full border-collapse">
-      <thead>
-        <tr class="bg-gray-200">
-          <th>trip_id</th>
-          <th>start_time</th>
-          <th>end_time</th>
-          <th>headway_secs</th>
-          <th>exact_times</th>
+    <table
+      v-if="frequencies.length"
+      class="w-full border border-gray-300 border-collapse"
+      cellpadding="5"
+      cellspacing="0"
+    >
+      <thead class="bg-gray-200">
+        <tr>
+          <th class="border border-gray-300 p-2 text-left">trip_id</th>
+          <th class="border border-gray-300 p-2 text-left">start_time</th>
+          <th class="border border-gray-300 p-2 text-left">end_time</th>
+          <th class="border border-gray-300 p-2 text-left">headway_secs</th>
+          <th class="border border-gray-300 p-2 text-left">exact_times</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, i) in frequencies" :key="i">
-          <td>{{ row.trip_id }}</td>
-          <td>{{ row.start_time }}</td>
-          <td>{{ row.end_time }}</td>
-          <td>{{ row.headway_secs }}</td>
-          <td>{{ globalExactTimes }}</td>
+        <tr v-for="(row, i) in frequencies" :key="i" class="odd:bg-white even:bg-gray-50">
+          <td class="border border-gray-300 p-2">{{ row.trip_id }}</td>
+          <td class="border border-gray-300 p-2">{{ row.start_time }}</td>
+          <td class="border border-gray-300 p-2">{{ row.end_time }}</td>
+          <td class="border border-gray-300 p-2">{{ row.headway_secs }}</td>
+          <td class="border border-gray-300 p-2">{{ globalExactTimes }}</td>
         </tr>
       </tbody>
     </table>
@@ -50,7 +60,7 @@
     <button
       v-if="frequencies.length"
       @click="downloadFrequencies"
-      class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+      class="mt-6 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
     >
       Download frequencies.txt
     </button>
@@ -67,7 +77,7 @@ const globalExactTimes = ref(0);
 // Parse time string in "h:mm:ss AM/PM" or "hh:mm:ss" 24h format to seconds since midnight
 function parseTimeToSeconds(timeStr) {
   const time = timeStr.trim();
-  // Try to parse with Date object with "1970-01-01" prefix to ensure consistent parsing
+  // Use Date parsing with 1970-01-01 prefix and convert to UTC
   const date = new Date(`1970-01-01T${convertTo24Hour(time)}Z`);
   if (isNaN(date.getTime())) {
     warnings.value.push(`Invalid time format: ${timeStr}`);
@@ -145,24 +155,35 @@ function processCSV(csvText) {
     trips[trip_id].push(secs);
   }
 
-  // Generate frequencies in pairs (0-1, 2-3, ...)
   for (const trip_id in trips) {
     const times = trips[trip_id].sort((a, b) => a - b);
     if (times.length < 2) {
       warnings.value.push(`Trip ${trip_id} has less than 2 times, skipping`);
       continue;
     }
-    for (let i = 0; i < times.length; i += 2) {
-      if (i + 1 >= times.length) break;
-      const start = times[i];
-      const end = times[i + 1];
+
+    let startIdx = 0;
+    while (startIdx < times.length - 1) {
+      const currentHeadway = times[startIdx + 1] - times[startIdx];
+      let endIdx = startIdx + 1;
+
+      // Group consecutive times while headway remains the same
+      while (
+        endIdx + 1 < times.length &&
+        times[endIdx + 1] - times[endIdx] === currentHeadway
+      ) {
+        endIdx++;
+      }
+
       frequencies.value.push({
         trip_id,
-        start_time: secondsToHHMMSS(start),
-        end_time: secondsToHHMMSS(end),
-        headway_secs: end - start,
+        start_time: secondsToHHMMSS(times[startIdx]),
+        end_time: secondsToHHMMSS(times[endIdx]),
+        headway_secs: currentHeadway,
         exact_times: globalExactTimes.value,
       });
+
+      startIdx = endIdx;
     }
   }
 }

@@ -2,8 +2,10 @@
   <div class="container">
     <h1>GTFS Frequencies Generator</h1>
 
+    <!-- File Upload -->
     <input type="file" accept=".csv" @change="handleFile" class="mb-4 p-2 border rounded" />
 
+    <!-- Exact Times Input -->
     <div v-if="frequencies.length" class="mb-4">
       <label class="block mb-1 font-semibold">Set exact_times for all rows:</label>
       <input
@@ -14,6 +16,7 @@
       />
     </div>
 
+    <!-- Warnings -->
     <div v-if="warnings.length">
       <h3>Warnings:</h3>
       <ul>
@@ -21,7 +24,14 @@
       </ul>
     </div>
 
-    <table v-if="frequencies.length" border="1" cellpadding="5" cellspacing="0" class="mt-4 w-full border-collapse">
+    <!-- Frequencies Table -->
+    <table
+      v-if="frequencies.length"
+      border="1"
+      cellpadding="5"
+      cellspacing="0"
+      class="mt-4 w-full border-collapse"
+    >
       <thead>
         <tr class="bg-gray-200">
           <th>trip_id</th>
@@ -42,6 +52,7 @@
       </tbody>
     </table>
 
+    <!-- Download Button -->
     <button
       v-if="frequencies.length"
       @click="downloadFrequencies"
@@ -59,8 +70,10 @@ const frequencies = ref([]);
 const warnings = ref([]);
 const globalExactTimes = ref(0);
 
+// Parse time string in "h:mm:ss AM/PM" or "hh:mm:ss" 24h format to seconds since midnight
 function parseTimeToSeconds(timeStr) {
   const time = timeStr.trim();
+  // Try to parse with Date object with "1970-01-01" prefix to ensure consistent parsing
   const date = new Date(`1970-01-01T${convertTo24Hour(time)}Z`);
   if (isNaN(date.getTime())) {
     warnings.value.push(`Invalid time format: ${timeStr}`);
@@ -69,9 +82,11 @@ function parseTimeToSeconds(timeStr) {
   return date.getUTCHours() * 3600 + date.getUTCMinutes() * 60 + date.getUTCSeconds();
 }
 
+// Convert AM/PM time like "5:00:00 AM" to "05:00:00" 24-hour string
 function convertTo24Hour(timeStr) {
   const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
-  if (!match) return timeStr;
+  if (!match) return timeStr; // fallback
+
   let [_, h, m, s = "00", meridian] = match;
   h = parseInt(h, 10);
   m = parseInt(m, 10);
@@ -85,6 +100,7 @@ function convertTo24Hour(timeStr) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+// Convert seconds since midnight to HH:MM:SS string
 function secondsToHHMMSS(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -129,12 +145,13 @@ function processCSV(csvText) {
       warnings.value.push(`Skipping invalid row: ${row.join(",")}`);
       continue;
     }
+    if (!trips[trip_id]) trips[trip_id] = [];
     const secs = parseTimeToSeconds(time);
     if (secs === null) continue;
-    if (!trips[trip_id]) trips[trip_id] = [];
     trips[trip_id].push(secs);
   }
 
+  // Group times by trip_id and group consecutive times with same headway
   for (const trip_id in trips) {
     const times = trips[trip_id].sort((a, b) => a - b);
     if (times.length < 2) {
@@ -142,13 +159,12 @@ function processCSV(csvText) {
       continue;
     }
 
-    // Group times with same headway into frequency ranges
     let startIdx = 0;
     while (startIdx < times.length - 1) {
-      let currentHeadway = times[startIdx + 1] - times[startIdx];
+      const currentHeadway = times[startIdx + 1] - times[startIdx];
       let endIdx = startIdx + 1;
 
-      // Extend the group while the headway remains the same
+      // Extend the group while next headway is the same
       while (
         endIdx + 1 < times.length &&
         times[endIdx + 1] - times[endIdx] === currentHeadway
@@ -169,6 +185,7 @@ function processCSV(csvText) {
   }
 }
 
+// Update exact_times in all frequency rows when globalExactTimes changes
 watch(globalExactTimes, (val) => {
   frequencies.value.forEach((row) => {
     row.exact_times = val;

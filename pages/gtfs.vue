@@ -19,7 +19,6 @@
       <thead>
         <tr>
           <th>trip_id</th>
-          <th>direction</th>
           <th>start_time</th>
           <th>end_time</th>
           <th>headway_secs</th>
@@ -29,7 +28,6 @@
       <tbody>
         <tr v-for="(row, i) in frequencies" :key="i">
           <td>{{ row.trip_id }}</td>
-          <td>{{ row.direction }}</td>
           <td>{{ row.start_time }}</td>
           <td>{{ row.end_time }}</td>
           <td>{{ row.headway_secs }}</td>
@@ -46,21 +44,6 @@ import { ref } from "vue";
 const frequencies = ref([]);
 const warnings = ref([]);
 
-// --- parse CSV manually ---
-function parseCSV(text) {
-  const lines = text.split(/\r?\n/).filter(line => line.trim() !== "");
-  const headers = lines[0].split(",").map(h => h.trim());
-  const data = lines.slice(1).map(line => {
-    const cols = line.split(",").map(c => c.trim());
-    const obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = cols[i];
-    });
-    return obj;
-  });
-  return data;
-}
-
 function handleFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -68,66 +51,80 @@ function handleFile(event) {
   const reader = new FileReader();
   reader.onload = (e) => {
     const text = e.target.result;
-    const data = parseCSV(text);
-    processCSV(data);
+    processCSV(text);
   };
   reader.readAsText(file);
 }
 
 function timeToSeconds(timeStr) {
-  const [h, m, s = 0] = timeStr.split(":").map(Number);
-  return h * 3600 + m * 60 + s;
+  const [h, m, s] = timeStr.split(":").map(Number);
+  return h * 3600 + m * 60 + (s || 0);
 }
 
 function secondsToTime(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
-  return [h, m, s].map(x => String(x).padStart(2, "0")).join(":");
+  return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
-function processCSV(data) {
+function processCSV(csvText) {
   warnings.value = [];
   frequencies.value = [];
 
-  const trips = {};
-  for (const row of data) {
-    if (!row.trip_id || !row.time) {
-      warnings.value.push("Missing trip_id or time: " + JSON.stringify(row));
-      continue;
-    }
-    const key = `${row.trip_id}-${row.direction || "0"}`;
-    if (!trips[key]) trips[key] = [];
-    trips[key].push(timeToSeconds(row.time));
+  const rows = csvText
+    .trim()
+    .split("\n")
+    .map((line) => line.split(","))
+    .filter((r) => r.length >= 2);
+
+  const headers = rows.shift();
+  const tripIdx = headers.indexOf("trip_id");
+  const timeIdx = headers.indexOf("time");
+
+  if (tripIdx === -1 || timeIdx === -1) {
+    warnings.value.push("CSV must have 'trip_id' and 'time' columns");
+    return;
   }
 
-  for (const key in trips) {
-    const [trip_id, direction] = key.split("-");
-    const times = trips[key].sort((a, b) => a - b);
+  // group times by trip_id
+  const trips = {};
+  for (const row of rows) {
+    const trip_id = row[tripIdx].trim();
+    const time = row[timeIdx].trim();
+    if (!trip_id || !time) {
+      warnings.value.push(`Skipping invalid row: ${row.join(",")}`);
+      continue;
+    }
+    if (!trips[trip_id]) trips[trip_id] = [];
+    trips[trip_id].push(timeToSeconds(time));
+  }
+
+  for (const trip_id in trips) {
+    const times = trips[trip_id].sort((a, b) => a - b);
 
     if (times.length < 2) {
-      warnings.value.push(`Trip ${trip_id} (direction ${direction}) has less than 2 times, skipping`);
+      warnings.value.push(`Trip ${trip_id} has less than 2 times, skipping`);
       continue;
     }
 
-    const headways = [];
-    for (let i = 1; i < times.length; i++) headways.push(times[i] - times[i - 1]);
+    const headways = times.slice(1).map((t, i) => t - times[i]);
     const uniqueHeadways = [...new Set(headways)];
 
     if (uniqueHeadways.length === 1) {
+      // all headways equal
       frequencies.value.push({
         trip_id,
-        direction,
         start_time: secondsToTime(times[0]),
         end_time: secondsToTime(times[times.length - 1]),
         headway_secs: uniqueHeadways[0],
         exact_times: 0,
       });
     } else {
+      // different headways, split into multiple rows
       for (let i = 1; i < times.length; i++) {
         frequencies.value.push({
           trip_id,
-          direction,
           start_time: secondsToTime(times[i - 1]),
           end_time: secondsToTime(times[i]),
           headway_secs: times[i] - times[i - 1],
@@ -140,9 +137,12 @@ function processCSV(data) {
 
 function downloadFrequencies() {
   const csvContent =
-    "trip_id,direction,start_time,end_time,headway_secs,exact_times\n" +
+    "trip_id,start_time,end_time,headway_secs,exact_times\n" +
     frequencies.value
-      .map(r => `${r.trip_id},${r.direction},${r.start_time},${r.end_time},${r.headway_secs},${r.exact_times}`)
+      .map(
+        (r) =>
+          `${r.trip_id},${r.start_time},${r.end_time},${r.headway_secs},${r.exact_times}`
+      )
       .join("\n");
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -157,7 +157,7 @@ function downloadFrequencies() {
 
 <style scoped>
 .container {
-  max-width: 900px;
+  max-width: 800px;
   margin: 20px auto;
   font-family: sans-serif;
 }
@@ -169,7 +169,8 @@ table {
   width: 100%;
   border-collapse: collapse;
 }
-th, td {
+th,
+td {
   padding: 8px 12px;
   text-align: left;
 }

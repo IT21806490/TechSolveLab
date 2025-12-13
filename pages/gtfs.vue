@@ -44,6 +44,7 @@ import { ref } from "vue";
 const frequencies = ref([]);
 const warnings = ref([]);
 
+// Handles file upload and reads it as text
 function handleFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -56,11 +57,29 @@ function handleFile(event) {
   reader.readAsText(file);
 }
 
+// Converts time strings into seconds from midnight
+// Supports both "HH:MM:SS", "HH:MM" and decimal hours like "5.00"
 function timeToSeconds(timeStr) {
-  const [h, m, s] = timeStr.split(":").map(Number);
-  return h * 3600 + m * 60 + (s || 0);
+  timeStr = timeStr.trim();
+  if (timeStr.includes(":")) {
+    const parts = timeStr.split(":").map(Number);
+    // Handle HH:MM or HH:MM:SS
+    const h = parts[0];
+    const m = parts[1] || 0;
+    const s = parts[2] || 0;
+    return h * 3600 + m * 60 + s;
+  } else {
+    // If decimal hours format e.g. 5.00, convert to HH:MM:SS
+    const decimalHours = parseFloat(timeStr);
+    if (isNaN(decimalHours)) return 0;
+    const h = Math.floor(decimalHours);
+    const m = Math.floor((decimalHours - h) * 60);
+    const s = Math.round(((decimalHours - h) * 60 - m) * 60);
+    return h * 3600 + m * 60 + s;
+  }
 }
 
+// Converts seconds back to HH:MM:SS string format
 function secondsToTime(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -68,30 +87,37 @@ function secondsToTime(seconds) {
   return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
+// Parses CSV text, validates, groups by trip_id, and calculates frequencies
 function processCSV(csvText) {
   warnings.value = [];
   frequencies.value = [];
 
+  // Split CSV lines, support CRLF and LF
   const rows = csvText
     .trim()
-    .split("\n")
-    .map((line) => line.split(","))
+    .split(/\r?\n/)
+    .map((line) => line.split(",").map((c) => c.trim()))
     .filter((r) => r.length >= 2);
 
+  if (rows.length === 0) {
+    warnings.value.push("Empty or invalid CSV file");
+    return;
+  }
+
   const headers = rows.shift();
-  const tripIdx = headers.indexOf("trip_id");
-  const timeIdx = headers.indexOf("time");
+  const tripIdx = headers.findIndex((h) => h.toLowerCase() === "trip_id");
+  const timeIdx = headers.findIndex((h) => h.toLowerCase() === "time");
 
   if (tripIdx === -1 || timeIdx === -1) {
     warnings.value.push("CSV must have 'trip_id' and 'time' columns");
     return;
   }
 
-  // group times by trip_id
+  // Group times by trip_id
   const trips = {};
   for (const row of rows) {
-    const trip_id = row[tripIdx].trim();
-    const time = row[timeIdx].trim();
+    const trip_id = row[tripIdx];
+    const time = row[timeIdx];
     if (!trip_id || !time) {
       warnings.value.push(`Skipping invalid row: ${row.join(",")}`);
       continue;
@@ -135,6 +161,7 @@ function processCSV(csvText) {
   }
 }
 
+// Trigger CSV download with frequencies.txt content
 function downloadFrequencies() {
   const csvContent =
     "trip_id,start_time,end_time,headway_secs,exact_times\n" +

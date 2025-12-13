@@ -1,47 +1,47 @@
 <template>
-  <div class="container mx-auto max-w-4xl p-6 font-sans bg-white shadow-md rounded-lg">
-    <h1 class="text-3xl font-semibold text-center mb-6 text-blue-600">GTFS Frequencies Generator</h1>
+  <div class="container mx-auto max-w-4xl p-6 bg-white shadow-xl rounded-lg">
+    <h1 class="text-3xl font-bold text-center mb-6 text-blue-600">GTFS Frequencies Generator</h1>
 
-    <!-- File Upload -->
+    <!-- File Upload Section -->
     <div class="mb-6">
-      <label class="block text-lg font-medium mb-2">Upload CSV File</label>
+      <label class="block text-lg font-medium mb-2 text-gray-800">Upload CSV File</label>
       <input
         type="file"
         accept=".csv"
         @change="handleFile"
-        class="p-3 border border-gray-300 rounded-lg w-full text-gray-700"
+        class="p-3 border border-gray-300 rounded-lg w-full text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
 
-    <!-- Exact Times Input -->
+    <!-- Exact Times Input Section -->
     <div v-if="frequencies.length" class="mb-6">
-      <label class="block text-lg font-medium mb-2">Set exact_times for all rows:</label>
+      <label class="block text-lg font-medium mb-2 text-gray-800">Set exact_times for all rows:</label>
       <input
         type="number"
         v-model.number="globalExactTimes"
-        class="p-3 border border-gray-300 rounded-lg w-full sm:w-40 text-gray-700"
+        class="p-3 border border-gray-300 rounded-lg w-full sm:w-40 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
         placeholder="0"
       />
     </div>
 
-    <!-- Warnings -->
+    <!-- Warnings Section -->
     <div v-if="warnings.length" class="mb-6">
-      <h3 class="text-orange-600 font-semibold text-lg mb-2">Warnings:</h3>
+      <h3 class="text-lg font-semibold text-orange-600 mb-2">Warnings:</h3>
       <ul class="list-disc list-inside text-orange-600">
         <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
       </ul>
     </div>
 
-    <!-- Frequencies Table -->
-    <div v-if="frequencies.length">
-      <table class="min-w-full bg-white table-auto rounded-lg shadow-md mb-6">
+    <!-- Frequencies Table Section -->
+    <div v-if="frequencies.length" class="mb-6">
+      <table class="min-w-full table-auto bg-white border border-gray-300 rounded-lg shadow-md">
         <thead class="bg-blue-600 text-white">
           <tr>
-            <th class="p-3 text-left">trip_id</th>
-            <th class="p-3 text-left">start_time</th>
-            <th class="p-3 text-left">end_time</th>
-            <th class="p-3 text-left">headway_secs</th>
-            <th class="p-3 text-left">exact_times</th>
+            <th class="p-3 text-left">Trip ID</th>
+            <th class="p-3 text-left">Start Time</th>
+            <th class="p-3 text-left">End Time</th>
+            <th class="p-3 text-left">Headway (secs)</th>
+            <th class="p-3 text-left">Exact Times</th>
           </tr>
         </thead>
         <tbody>
@@ -56,13 +56,13 @@
       </table>
     </div>
 
-    <!-- Download Button -->
-    <div v-if="frequencies.length">
+    <!-- Download Button Section -->
+    <div v-if="frequencies.length" class="text-center">
       <button
         @click="downloadFrequencies"
-        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full sm:w-auto"
+        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
-        Download frequencies.txt
+        Download Frequencies.txt
       </button>
     </div>
   </div>
@@ -155,6 +155,7 @@ function processCSV(csvText) {
     trips[trip_id].push(secs);
   }
 
+  // Merge consecutive times with same headway
   for (const trip_id in trips) {
     const times = trips[trip_id].sort((a, b) => a - b);
     if (times.length < 2) {

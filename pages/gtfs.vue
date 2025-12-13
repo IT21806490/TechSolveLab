@@ -25,13 +25,7 @@
     </div>
 
     <!-- Frequencies Table -->
-    <table
-      v-if="frequencies.length"
-      border="1"
-      cellpadding="5"
-      cellspacing="0"
-      class="mt-4 w-full border-collapse"
-    >
+    <table v-if="frequencies.length" border="1" cellpadding="5" cellspacing="0" class="mt-4 w-full border-collapse">
       <thead>
         <tr class="bg-gray-200">
           <th>trip_id</th>
@@ -151,41 +145,29 @@ function processCSV(csvText) {
     trips[trip_id].push(secs);
   }
 
-  // Group times by trip_id and group consecutive times with same headway
+  // Generate frequencies in pairs (0-1, 2-3, ...)
   for (const trip_id in trips) {
     const times = trips[trip_id].sort((a, b) => a - b);
     if (times.length < 2) {
       warnings.value.push(`Trip ${trip_id} has less than 2 times, skipping`);
       continue;
     }
-
-    let startIdx = 0;
-    while (startIdx < times.length - 1) {
-      const currentHeadway = times[startIdx + 1] - times[startIdx];
-      let endIdx = startIdx + 1;
-
-      // Extend the group while next headway is the same
-      while (
-        endIdx + 1 < times.length &&
-        times[endIdx + 1] - times[endIdx] === currentHeadway
-      ) {
-        endIdx++;
-      }
-
+    for (let i = 0; i < times.length; i += 2) {
+      if (i + 1 >= times.length) break;
+      const start = times[i];
+      const end = times[i + 1];
       frequencies.value.push({
         trip_id,
-        start_time: secondsToHHMMSS(times[startIdx]),
-        end_time: secondsToHHMMSS(times[endIdx]),
-        headway_secs: currentHeadway,
+        start_time: secondsToHHMMSS(start),
+        end_time: secondsToHHMMSS(end),
+        headway_secs: end - start,
         exact_times: globalExactTimes.value,
       });
-
-      startIdx = endIdx;
     }
   }
 }
 
-// Update exact_times in all frequency rows when globalExactTimes changes
+// Update exact_times when globalExactTimes changes
 watch(globalExactTimes, (val) => {
   frequencies.value.forEach((row) => {
     row.exact_times = val;

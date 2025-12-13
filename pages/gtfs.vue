@@ -37,11 +37,11 @@
       <table class="min-w-full table-auto bg-white border border-gray-300 rounded-lg shadow-md">
         <thead class="bg-blue-600 text-white">
           <tr>
-            <th class="p-3 text-left">Trip ID</th>
-            <th class="p-3 text-left">Start Time</th>
-            <th class="p-3 text-left">End Time</th>
-            <th class="p-3 text-left">Headway (secs)</th>
-            <th class="p-3 text-left">Exact Times</th>
+            <th class="p-3 text-left text-black">Trip ID</th>
+            <th class="p-3 text-left text-black">Start Time</th>
+            <th class="p-3 text-left text-black">End Time</th>
+            <th class="p-3 text-left text-black">Headway (secs)</th>
+            <th class="p-3 text-left text-black">Exact Times</th>
           </tr>
         </thead>
         <tbody>
@@ -155,7 +155,6 @@ function processCSV(csvText) {
     trips[trip_id].push(secs);
   }
 
-  // Merge consecutive times with same headway
   for (const trip_id in trips) {
     const times = trips[trip_id].sort((a, b) => a - b);
     if (times.length < 2) {
@@ -248,6 +247,7 @@ td {
 th {
   background-color: #f3f4f6;
   font-weight: bold;
+  color: black; /* Ensuring headers have black text */
 }
 
 button {

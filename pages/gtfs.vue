@@ -10,6 +10,17 @@
       class="mb-4 p-2 border rounded"
     />
 
+    <!-- Exact Times Input -->
+    <div v-if="frequencies.length" class="mb-4">
+      <label class="block mb-1 font-semibold">Set exact_times for all rows:</label>
+      <input
+        type="number"
+        v-model.number="globalExactTimes"
+        class="p-2 border rounded w-32"
+        placeholder="0"
+      />
+    </div>
+
     <!-- Warnings -->
     <div v-if="warnings.length" class="mb-4">
       <h3 class="text-lg font-semibold text-orange-600">Warnings:</h3>
@@ -38,13 +49,7 @@
             <td class="px-4 py-2 border">{{ row.start_time }}</td>
             <td class="px-4 py-2 border">{{ row.end_time }}</td>
             <td class="px-4 py-2 border">{{ row.headway_secs }}</td>
-            <td class="px-4 py-2 border">
-              <input
-                type="number"
-                v-model.number="row.exact_times"
-                class="w-16 p-1 border rounded"
-              />
-            </td>
+            <td class="px-4 py-2 border">{{ globalExactTimes }}</td>
           </tr>
         </tbody>
       </table>
@@ -62,12 +67,19 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, watch } from "vue";
 
 const frequencies = ref([]);
 const warnings = ref([]);
+const globalExactTimes = ref(0);
 
-// Handle CSV file upload
+// Watch globalExactTimes and update all rows if needed
+watch(globalExactTimes, (val) => {
+  frequencies.value.forEach((row) => {
+    row.exact_times = val;
+  });
+});
+
 function handleFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -83,7 +95,6 @@ function handleFile(event) {
 function timeToSeconds(timeStr) {
   let h, m;
   if (timeStr.includes(".")) {
-    // decimal format 5.12 => 5 hours, 12 minutes
     [h, m] = timeStr.split(".").map(Number);
   } else if (timeStr.includes(":")) {
     [h, m] = timeStr.split(":").map(Number);
@@ -102,7 +113,6 @@ function secondsToTime(seconds) {
   return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
-// Process CSV text
 function processCSV(csvText) {
   warnings.value = [];
   frequencies.value = [];
@@ -142,34 +152,26 @@ function processCSV(csvText) {
       continue;
     }
 
-    // Calculate headways and generate frequency rows
-    const headways = times.slice(1).map((t, i) => t - times[i]);
-    let i = 0;
-    while (i < times.length - 1) {
-      const start = times[i];
-      const end = times[i + 1];
-      const headway = end - start;
-
+    // Create frequency rows
+    for (let i = 1; i < times.length; i++) {
       frequencies.value.push({
         trip_id,
-        start_time: secondsToTime(start),
-        end_time: secondsToTime(end),
-        headway_secs: headway,
-        exact_times: 0, // default, editable by user
+        start_time: secondsToTime(times[i - 1]),
+        end_time: secondsToTime(times[i]),
+        headway_secs: times[i] - times[i - 1],
+        exact_times: globalExactTimes.value,
       });
-      i++;
     }
   }
 }
 
-// Download frequencies.txt
 function downloadFrequencies() {
   const csvContent =
     "trip_id,start_time,end_time,headway_secs,exact_times\n" +
     frequencies.value
       .map(
         (r) =>
-          `${r.trip_id},${r.start_time},${r.end_time},${r.headway_secs},${r.exact_times}`
+          `${r.trip_id},${r.start_time},${r.end_time},${r.headway_secs},${globalExactTimes.value}`
       )
       .join("\n");
 
@@ -184,5 +186,5 @@ function downloadFrequencies() {
 </script>
 
 <style scoped>
-/* Tailwind is already used via classes */
+/* Tailwind CSS is already used via classes */
 </style>

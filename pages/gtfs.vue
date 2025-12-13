@@ -1,69 +1,70 @@
 <template>
-  <div class="container mx-auto max-w-3xl p-4 font-sans">
-    <h1 class="text-2xl font-bold mb-6">GTFS Frequencies Generator</h1>
+  <div class="container mx-auto max-w-4xl p-6 font-sans bg-white shadow-md rounded-lg">
+    <h1 class="text-3xl font-semibold text-center mb-6 text-blue-600">GTFS Frequencies Generator</h1>
 
     <!-- File Upload -->
-    <input
-      type="file"
-      accept=".csv"
-      @change="handleFile"
-      class="mb-4 p-2 border rounded w-full"
-    />
+    <div class="mb-6">
+      <label class="block text-lg font-medium mb-2">Upload CSV File</label>
+      <input
+        type="file"
+        accept=".csv"
+        @change="handleFile"
+        class="p-3 border border-gray-300 rounded-lg w-full text-gray-700"
+      />
+    </div>
 
     <!-- Exact Times Input -->
     <div v-if="frequencies.length" class="mb-6">
-      <label class="block mb-1 font-semibold">Set exact_times for all rows:</label>
+      <label class="block text-lg font-medium mb-2">Set exact_times for all rows:</label>
       <input
         type="number"
         v-model.number="globalExactTimes"
-        class="p-2 border rounded w-32"
+        class="p-3 border border-gray-300 rounded-lg w-full sm:w-40 text-gray-700"
         placeholder="0"
       />
     </div>
 
     <!-- Warnings -->
-    <div v-if="warnings.length" class="mb-4">
-      <h3 class="text-orange-600 font-semibold mb-2">Warnings:</h3>
+    <div v-if="warnings.length" class="mb-6">
+      <h3 class="text-orange-600 font-semibold text-lg mb-2">Warnings:</h3>
       <ul class="list-disc list-inside text-orange-600">
         <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
       </ul>
     </div>
 
     <!-- Frequencies Table -->
-    <table
-      v-if="frequencies.length"
-      class="w-full border border-gray-300 border-collapse"
-      cellpadding="5"
-      cellspacing="0"
-    >
-      <thead class="bg-gray-200">
-        <tr>
-          <th class="border border-gray-300 p-2 text-left">trip_id</th>
-          <th class="border border-gray-300 p-2 text-left">start_time</th>
-          <th class="border border-gray-300 p-2 text-left">end_time</th>
-          <th class="border border-gray-300 p-2 text-left">headway_secs</th>
-          <th class="border border-gray-300 p-2 text-left">exact_times</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(row, i) in frequencies" :key="i" class="odd:bg-white even:bg-gray-50">
-          <td class="border border-gray-300 p-2">{{ row.trip_id }}</td>
-          <td class="border border-gray-300 p-2">{{ row.start_time }}</td>
-          <td class="border border-gray-300 p-2">{{ row.end_time }}</td>
-          <td class="border border-gray-300 p-2">{{ row.headway_secs }}</td>
-          <td class="border border-gray-300 p-2">{{ globalExactTimes }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-if="frequencies.length">
+      <table class="min-w-full bg-white table-auto rounded-lg shadow-md mb-6">
+        <thead class="bg-blue-600 text-white">
+          <tr>
+            <th class="p-3 text-left">trip_id</th>
+            <th class="p-3 text-left">start_time</th>
+            <th class="p-3 text-left">end_time</th>
+            <th class="p-3 text-left">headway_secs</th>
+            <th class="p-3 text-left">exact_times</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(row, i) in frequencies" :key="i" class="odd:bg-gray-50 even:bg-gray-100">
+            <td class="p-3">{{ row.trip_id }}</td>
+            <td class="p-3">{{ row.start_time }}</td>
+            <td class="p-3">{{ row.end_time }}</td>
+            <td class="p-3">{{ row.headway_secs }}</td>
+            <td class="p-3">{{ globalExactTimes }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <!-- Download Button -->
-    <button
-      v-if="frequencies.length"
-      @click="downloadFrequencies"
-      class="mt-6 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-    >
-      Download frequencies.txt
-    </button>
+    <div v-if="frequencies.length">
+      <button
+        @click="downloadFrequencies"
+        class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full sm:w-auto"
+      >
+        Download frequencies.txt
+      </button>
+    </div>
   </div>
 </template>
 
@@ -154,7 +155,6 @@ function processCSV(csvText) {
     trips[trip_id].push(secs);
   }
 
-  // Merge consecutive times with same headway
   for (const trip_id in trips) {
     const times = trips[trip_id].sort((a, b) => a - b);
     if (times.length < 2) {
@@ -219,21 +219,41 @@ function downloadFrequencies() {
 
 <style scoped>
 .container {
-  max-width: 800px;
-  margin: 20px auto;
-  font-family: sans-serif;
+  background-color: #f9fafb;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
 }
+
 h1 {
-  margin-bottom: 20px;
+  color: #4b5563;
+  margin-bottom: 1.5rem;
 }
+
 table {
-  margin-top: 20px;
   width: 100%;
   border-collapse: collapse;
 }
+
 th,
 td {
-  padding: 8px 12px;
+  padding: 0.75rem;
   text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+th {
+  background-color: #f3f4f6;
+  font-weight: bold;
+}
+
+button {
+  transition: background-color 0.3s ease;
+}
+
+button:hover {
+  background-color: #2563eb;
 }
 </style>

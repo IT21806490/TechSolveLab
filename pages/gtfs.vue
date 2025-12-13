@@ -1,65 +1,114 @@
 <template>
-  <div class="container">
-    <h1>GTFS Frequencies Generator</h1>
+  <div class="container mx-auto max-w-3xl p-4 font-sans">
+    <h1 class="text-2xl font-bold mb-6">GTFS Frequencies Generator</h1>
 
-    <input type="file" accept=".csv" @change="handleFile" />
+    <!-- File Upload -->
+    <input
+      type="file"
+      accept=".csv"
+      @change="handleFile"
+      class="mb-4 p-2 border rounded w-full"
+    />
 
-    <div v-if="warnings.length">
-      <h3>Warnings:</h3>
-      <ul>
-        <li v-for="(w, i) in warnings" :key="i" style="color: orange">{{ w }}</li>
+    <!-- Exact Times Input -->
+    <div v-if="frequencies.length" class="mb-6">
+      <label class="block mb-1 font-semibold">Set exact_times for all rows:</label>
+      <input
+        type="number"
+        v-model.number="globalExactTimes"
+        class="p-2 border rounded w-32"
+        placeholder="0"
+      />
+    </div>
+
+    <!-- Warnings -->
+    <div v-if="warnings.length" class="mb-4">
+      <h3 class="text-orange-600 font-semibold mb-2">Warnings:</h3>
+      <ul class="list-disc list-inside text-orange-600">
+        <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
       </ul>
     </div>
 
-    <button v-if="frequencies.length" @click="downloadFrequencies">
-      Download frequencies.txt
-    </button>
-
-    <table v-if="frequencies.length" border="1" cellpadding="5" cellspacing="0">
-      <thead>
+    <!-- Frequencies Table -->
+    <table
+      v-if="frequencies.length"
+      class="w-full border border-gray-300 border-collapse"
+      cellpadding="5"
+      cellspacing="0"
+    >
+      <thead class="bg-gray-200">
         <tr>
-          <th>trip_id</th>
-          <th>start_time</th>
-          <th>end_time</th>
-          <th>headway_secs</th>
-          <th>exact_times</th>
+          <th class="border border-gray-300 p-2 text-left">trip_id</th>
+          <th class="border border-gray-300 p-2 text-left">start_time</th>
+          <th class="border border-gray-300 p-2 text-left">end_time</th>
+          <th class="border border-gray-300 p-2 text-left">headway_secs</th>
+          <th class="border border-gray-300 p-2 text-left">exact_times</th>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="(row, i) in frequencies" :key="i">
-          <td>{{ row.trip_id }}</td>
-          <td>{{ row.start_time }}</td>
-          <td>{{ row.end_time }}</td>
-          <td>{{ row.headway_secs }}</td>
-          <td>{{ row.exact_times }}</td>
+        <tr v-for="(row, i) in frequencies" :key="i" class="odd:bg-white even:bg-gray-50">
+          <td class="border border-gray-300 p-2">{{ row.trip_id }}</td>
+          <td class="border border-gray-300 p-2">{{ row.start_time }}</td>
+          <td class="border border-gray-300 p-2">{{ row.end_time }}</td>
+          <td class="border border-gray-300 p-2">{{ row.headway_secs }}</td>
+          <td class="border border-gray-300 p-2">{{ globalExactTimes }}</td>
         </tr>
       </tbody>
     </table>
+
+    <!-- Download Button -->
+    <button
+      v-if="frequencies.length"
+      @click="downloadFrequencies"
+      class="mt-6 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+    >
+      Download frequencies.txt
+    </button>
   </div>
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { ref, watch } from "vue";
 
 const frequencies = ref([]);
 const warnings = ref([]);
+const globalExactTimes = ref(0);
 
-// Convert decimal time (5.12) to seconds for calculations
-function decimalToSeconds(decimalStr) {
-  const num = parseFloat(decimalStr);
-  const h = Math.floor(num);
-  const m = Math.round((num - h) * 100);
-  return h * 3600 + m * 60;
+// Parse time string in "h:mm:ss AM/PM" or "hh:mm:ss" 24h format to seconds since midnight
+function parseTimeToSeconds(timeStr) {
+  const time = timeStr.trim();
+  const date = new Date(`1970-01-01T${convertTo24Hour(time)}Z`);
+  if (isNaN(date.getTime())) {
+    warnings.value.push(`Invalid time format: ${timeStr}`);
+    return null;
+  }
+  return date.getUTCHours() * 3600 + date.getUTCMinutes() * 60 + date.getUTCSeconds();
 }
 
-// Convert decimal hours to HH.MM:SS format
-function decimalToHHMMSS(decimalStr) {
-  const num = parseFloat(decimalStr);
-  const h = Math.floor(num);
-  const m = Math.round((num - h) * 100);
-  const hh = String(h).padStart(2, "0");
-  const mm = String(m).padStart(2, "0");
-  return `${hh}.${mm}:00`;
+// Convert AM/PM time like "5:00:00 AM" to "05:00:00" 24-hour string
+function convertTo24Hour(timeStr) {
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (!match) return timeStr;
+
+  let [_, h, m, s = "00", meridian] = match;
+  h = parseInt(h, 10);
+  m = parseInt(m, 10);
+  s = parseInt(s, 10);
+
+  if (meridian) {
+    meridian = meridian.toUpperCase();
+    if (meridian === "PM" && h !== 12) h += 12;
+    if (meridian === "AM" && h === 12) h = 0;
+  }
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+// Convert seconds since midnight to HH:MM:SS string
+function secondsToHHMMSS(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
 function handleFile(event) {
@@ -68,8 +117,7 @@ function handleFile(event) {
 
   const reader = new FileReader();
   reader.onload = (e) => {
-    const text = e.target.result;
-    processCSV(text);
+    processCSV(e.target.result);
   };
   reader.readAsText(file);
 }
@@ -81,8 +129,7 @@ function processCSV(csvText) {
   const rows = csvText
     .trim()
     .split("\n")
-    .map((line) => line.split(","))
-    .filter((r) => r.length >= 2);
+    .map((line) => line.split(",").map((v) => v.trim()));
 
   const headers = rows.shift().map((h) => h.trim());
   const tripIdx = headers.indexOf("trip_id");
@@ -93,41 +140,62 @@ function processCSV(csvText) {
     return;
   }
 
-  // Group times by trip_id
   const trips = {};
   for (const row of rows) {
-    const trip_id = row[tripIdx].trim();
-    const time = row[timeIdx].trim();
+    const trip_id = row[tripIdx];
+    const time = row[timeIdx];
     if (!trip_id || !time) {
       warnings.value.push(`Skipping invalid row: ${row.join(",")}`);
       continue;
     }
     if (!trips[trip_id]) trips[trip_id] = [];
-    trips[trip_id].push(time);
+    const secs = parseTimeToSeconds(time);
+    if (secs === null) continue;
+    trips[trip_id].push(secs);
   }
 
-  // Generate frequencies in **pairs** (0-1, 2-3, 4-5...)
+  // Merge consecutive times with same headway
   for (const trip_id in trips) {
-    const times = trips[trip_id];
+    const times = trips[trip_id].sort((a, b) => a - b);
     if (times.length < 2) {
       warnings.value.push(`Trip ${trip_id} has less than 2 times, skipping`);
       continue;
     }
 
-    for (let i = 0; i < times.length; i += 2) {
-      if (i + 1 >= times.length) break; // ignore last if no pair
-      const start = times[i];
-      const end = times[i + 1];
+    let startIdx = 0;
+    while (startIdx < times.length - 1) {
+      let endIdx = startIdx + 1;
+      let currentHeadway = times[endIdx] - times[startIdx];
+
+      // Merge intervals while headway is the same
+      while (
+        endIdx + 1 < times.length &&
+        times[endIdx + 1] - times[endIdx] === currentHeadway
+      ) {
+        endIdx++;
+      }
+
+      // Create a frequency record for the merged times
       frequencies.value.push({
         trip_id,
-        start_time: decimalToHHMMSS(start),
-        end_time: decimalToHHMMSS(end),
-        headway_secs: decimalToSeconds(end) - decimalToSeconds(start),
-        exact_times: 0,
+        start_time: secondsToHHMMSS(times[startIdx]),
+        end_time: secondsToHHMMSS(times[endIdx]),
+        headway_secs: currentHeadway,
+        exact_times: globalExactTimes.value,
       });
+
+      // Move to the next unmerged time
+      startIdx = endIdx + 1;
     }
   }
 }
+
+// Update exact_times when globalExactTimes changes
+watch(globalExactTimes, (val) => {
+  frequencies.value.forEach((row) => {
+    row.exact_times = val;
+  });
+});
 
 function downloadFrequencies() {
   const csvContent =
@@ -135,7 +203,7 @@ function downloadFrequencies() {
     frequencies.value
       .map(
         (r) =>
-          `${r.trip_id},${r.start_time},${r.end_time},${r.headway_secs},${r.exact_times}`
+          `${r.trip_id},${r.start_time},${r.end_time},${r.headway_secs},${globalExactTimes.value}`
       )
       .join("\n");
 
@@ -169,4 +237,3 @@ td {
   text-align: left;
 }
 </style>
-

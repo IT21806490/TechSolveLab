@@ -64,22 +64,42 @@ const frequencies = ref([]);
 const warnings = ref([]);
 const globalExactTimes = ref(0);
 
-// Convert decimal time (5.12) to seconds
-function decimalToSeconds(decimalStr) {
-  const num = parseFloat(decimalStr);
-  const h = Math.floor(num);
-  const m = Math.round((num - h) * 100);
-  return h * 3600 + m * 60;
+// Parse time string in "h:mm:ss AM/PM" or "hh:mm:ss" 24h format to seconds since midnight
+function parseTimeToSeconds(timeStr) {
+  const time = timeStr.trim();
+  // Try to parse with Date object with "1970-01-01" prefix to ensure consistent parsing
+  const date = new Date(`1970-01-01T${convertTo24Hour(time)}Z`);
+  if (isNaN(date.getTime())) {
+    warnings.value.push(`Invalid time format: ${timeStr}`);
+    return null;
+  }
+  return date.getUTCHours() * 3600 + date.getUTCMinutes() * 60 + date.getUTCSeconds();
 }
 
-// Convert decimal hours to HH.MM:SS format
-function decimalToHHMMSS(decimalStr) {
-  const num = parseFloat(decimalStr);
-  const h = Math.floor(num);
-  const m = Math.round((num - h) * 100);
-  const hh = String(h).padStart(2, "0");
-  const mm = String(m).padStart(2, "0");
-  return `${hh}.${mm}:00`;
+// Convert AM/PM time like "5:00:00 AM" to "05:00:00" 24-hour string
+function convertTo24Hour(timeStr) {
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?$/i);
+  if (!match) return timeStr; // fallback
+
+  let [_, h, m, s = "00", meridian] = match;
+  h = parseInt(h, 10);
+  m = parseInt(m, 10);
+  s = parseInt(s, 10);
+
+  if (meridian) {
+    meridian = meridian.toUpperCase();
+    if (meridian === "PM" && h !== 12) h += 12;
+    if (meridian === "AM" && h === 12) h = 0;
+  }
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+// Convert seconds since midnight to HH:MM:SS string
+function secondsToHHMMSS(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
 function handleFile(event) {
@@ -111,7 +131,6 @@ function processCSV(csvText) {
     return;
   }
 
-  // Group times by trip_id
   const trips = {};
   for (const row of rows) {
     const trip_id = row[tripIdx];
@@ -121,26 +140,27 @@ function processCSV(csvText) {
       continue;
     }
     if (!trips[trip_id]) trips[trip_id] = [];
-    trips[trip_id].push(time);
+    const secs = parseTimeToSeconds(time);
+    if (secs === null) continue;
+    trips[trip_id].push(secs);
   }
 
-  // Generate frequencies in **pairs** (0-1, 2-3, 4-5...)
+  // Generate frequencies in pairs (0-1, 2-3, ...)
   for (const trip_id in trips) {
-    const times = trips[trip_id];
+    const times = trips[trip_id].sort((a, b) => a - b);
     if (times.length < 2) {
       warnings.value.push(`Trip ${trip_id} has less than 2 times, skipping`);
       continue;
     }
-
     for (let i = 0; i < times.length; i += 2) {
-      if (i + 1 >= times.length) break; // ignore last if no pair
+      if (i + 1 >= times.length) break;
       const start = times[i];
       const end = times[i + 1];
       frequencies.value.push({
         trip_id,
-        start_time: decimalToHHMMSS(start),
-        end_time: decimalToHHMMSS(end),
-        headway_secs: decimalToSeconds(end) - decimalToSeconds(start),
+        start_time: secondsToHHMMSS(start),
+        end_time: secondsToHHMMSS(end),
+        headway_secs: end - start,
         exact_times: globalExactTimes.value,
       });
     }

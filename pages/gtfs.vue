@@ -1,23 +1,58 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
     <div class="container mx-auto max-w-4xl">
-      <!-- Header -->
       <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">
-          📊 GTFS Frequencies Generator
-        </h1>
-        <p class="text-gray-600">
-          Upload your CSV file with trip_id and time columns to generate GTFS frequencies.txt
-        </p>
+        <div class="flex justify-between items-start"> 
+          <div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">
+              📊 GTFS Frequencies Generator
+            </h1>
+            <p class="text-gray-600">
+              Upload your CSV file with trip_id and time columns to generate GTFS frequencies.txt
+            </p>
+          </div>
+          
+<a
+  href="/gtfs2"
+  class="
+    mt-1 ml-4 flex-shrink-0
+    bg-gradient-to-r from-blue-600 to-indigo-600
+    text-white
+    px-6 py-3
+    rounded-lg
+    font-semibold
+    hover:from-blue-700 hover:to-indigo-700
+    transition-all
+    shadow-md hover:shadow-lg
+    flex items-center justify-center space-x-2
+    focus:outline-none
+    focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
+  "
+>
+  <svg
+    class="w-5 h-5 text-white"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+  >
+    <path
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"
+    />
+  </svg>
+  <span>GTFS Shapes & Stops Generator</span>
+</a>
+
+          </div>
       </div>
 
-      <!-- File Upload Card -->
       <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           1. Upload CSV File
         </h2>
         
-        <!-- Tip Box -->
         <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 mb-4">
           <div class="flex items-start">
             <svg class="w-5 h-5 text-blue-500 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -63,7 +98,6 @@
           </label>
         </div>
         
-        <!-- File Info -->
         <div v-if="fileName" class="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center">
           <svg class="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
@@ -72,7 +106,6 @@
         </div>
       </div>
 
-      <!-- Exact Times Configuration -->
       <div v-if="frequencies.length" class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           2. Configure exact_times
@@ -112,7 +145,6 @@
         </p>
       </div>
 
-      <!-- Warnings -->
       <div v-if="warnings.length" class="bg-orange-50 border-l-4 border-orange-500 rounded-lg p-4 mb-6">
         <div class="flex items-start">
           <svg class="w-6 h-6 text-orange-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -129,7 +161,6 @@
         </div>
       </div>
 
-      <!-- Results Summary -->
       <div v-if="frequencies.length" class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           3. Review Generated Frequencies
@@ -145,7 +176,6 @@
           </div>
         </div>
 
-        <!-- Frequencies Table -->
         <div class="overflow-x-auto rounded-lg border border-gray-200">
           <table class="w-full">
             <thead class="bg-gray-50">
@@ -195,7 +225,6 @@
         </div>
       </div>
 
-      <!-- Download Button -->
       <div v-if="frequencies.length" class="bg-white rounded-lg shadow-lg p-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           4. Download Result
@@ -211,7 +240,6 @@
         </button>
       </div>
 
-      <!-- Empty State -->
       <div v-if="!frequencies.length && !warnings.length" class="bg-white rounded-lg shadow-lg p-12 text-center">
         <svg class="w-24 h-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>

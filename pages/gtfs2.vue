@@ -358,6 +358,7 @@
                     <input
                       type="text"
                       v-model="stop.stop_id"
+                      @input="handleStopIdChange($event, 'up', i)"
                       class="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter stop ID"
                     />
@@ -375,9 +376,9 @@
               </tbody>
             </table>
           </div>
-          <div class="p-4 bg-gray-50 border-t border-gray-200">
-            <p class="text-sm text-gray-600">
-              💡 Tip: Edit the Stop ID column to assign unique identifiers to each stop
+          <div class="p-4 bg-blue-50 border-t border-blue-200">
+            <p class="text-sm text-blue-700">
+              💡 <strong>Auto-generate Stop IDs:</strong> Enter a Stop ID in the first row (e.g., "abcd001") and all subsequent rows will automatically generate sequential IDs (abcd002, abcd003, etc.)
             </p>
           </div>
         </div>
@@ -411,6 +412,7 @@
                     <input
                       type="text"
                       v-model="stop.stop_id"
+                      @input="handleStopIdChange($event, 'down', i)"
                       class="w-full px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-transparent"
                       placeholder="Enter stop ID"
                     />
@@ -428,9 +430,9 @@
               </tbody>
             </table>
           </div>
-          <div class="p-4 bg-gray-50 border-t border-gray-200">
-            <p class="text-sm text-gray-600">
-              💡 Tip: Edit the Stop ID column to assign unique identifiers to each stop
+          <div class="p-4 bg-indigo-50 border-t border-indigo-200">
+            <p class="text-sm text-indigo-700">
+              💡 <strong>Auto-generate Stop IDs:</strong> Enter a Stop ID in the first row (e.g., "abcd001") and all subsequent rows will automatically generate sequential IDs (abcd002, abcd003, etc.)
             </p>
           </div>
         </div>
@@ -585,8 +587,6 @@ function parseKML(kmlText) {
               shape_pt_sequence: shapeSequence++
             };
 
-            // First LineString is Up trip
-            // Second LineString is Down trip
             if (lineIndex === 0) {
               upShapes.value.push(shapePoint);
             } else if (lineIndex === 1) {
@@ -597,17 +597,15 @@ function parseKML(kmlText) {
       });
     });
 
-    // Extract all Folders to find stops (Primary Logic: Use Folders)
+    // Extract all Folders to find stops
     const folders = xmlDoc.querySelectorAll("Folder");
     
     folders.forEach((folder) => {
       const folderName = folder.querySelector("name")?.textContent.trim().toLowerCase() || "";
       
-      // Determine if this folder contains stops and which direction
       const isStopsUpFolder = folderName.includes("stops") && (folderName.includes("up") || folderName.includes("pettah"));
       const isStopsDownFolder = folderName.includes("stops") && (folderName.includes("down") || folderName.includes("maharagama"));
       
-      // Extract Point placemarks for stops within this folder
       const placemarks = folder.querySelectorAll("Placemark");
 
       placemarks.forEach((placemark, placemarkIndex) => {
@@ -629,7 +627,6 @@ function parseKML(kmlText) {
                 stop_lon: lon.toFixed(7)
               };
 
-              // Add to appropriate stops array based on folder name
               if (isStopsUpFolder) {
                 upStops.value.push(stopData);
               } else if (isStopsDownFolder) {
@@ -641,11 +638,10 @@ function parseKML(kmlText) {
       });
     });
 
-    // --- FALLBACK LOGIC (Corrected) ---
-    // If no stops found in specific folders, apply fallback logic
+    // Fallback logic
     if (upStops.value.length === 0 && downStops.value.length === 0) {
       const allPlacemarks = xmlDoc.querySelectorAll("Placemark");
-      const combinedStops = []; // Temporary array to hold all parsed stops
+      const combinedStops = [];
 
       allPlacemarks.forEach((placemark) => {
         const point = placemark.querySelector("Point coordinates");
@@ -659,7 +655,6 @@ function parseKML(kmlText) {
             const lat = parseFloat(parts[1]);
 
             if (!isNaN(lon) && !isNaN(lat)) {
-              // Collect all stops temporarily
               combinedStops.push({
                 stop_name: name,
                 stop_lat: lat.toFixed(7),
@@ -670,39 +665,30 @@ function parseKML(kmlText) {
         }
       });
       
-      // HEURISTIC SPLIT: If both shapes are present, assume all stops are combined and split them.
       if (combinedStops.length > 0 && upShapes.value.length > 0 && downShapes.value.length > 0) {
-        // Split the stops into two halves. Using Math.ceil for uneven splits.
         const splitIndex = Math.ceil(combinedStops.length / 2);
         
-        // Assign first half to Up Stops, generating stop_id
         upStops.value = combinedStops.slice(0, splitIndex).map((stop, i) => ({
             ...stop,
-            // Assign a directional default ID (e.g., UP_001)
-            stop_id: `UP_${(i + 1).toString().padStart(3, '0')}`, 
+            stop_id: `UP_${(i + 1).toString().padStart(3, '0')}`,
         }));
         
-        // Assign second half to Down Stops, generating stop_id
         downStops.value = combinedStops.slice(splitIndex).map((stop, i) => ({
             ...stop,
-            // Assign a directional default ID (e.g., DN_001)
-            stop_id: `DN_${(i + 1).toString().padStart(3, '0')}`, 
+            stop_id: `DN_${(i + 1).toString().padStart(3, '0')}`,
         }));
 
         warnings.value.push(`Stops were not separated by direction in KML folders. Heuristically split ${combinedStops.length} stops: ${upStops.value.length} assigned to 'Up' and ${downStops.value.length} to 'Down'. Please review and edit Stop IDs in section 3.`);
 
       } else if (combinedStops.length > 0) {
-        // Fallback for single-direction (or no second shape): all stops go to upStops.
         upStops.value = combinedStops.map((stop, i) => ({
             ...stop,
-            // Assign a generic stop ID (e.g., STOP_001SP)
             stop_id: `${(i + 1).toString().padStart(3, '0')}SP`,
         }));
       }
     }
-    // --- END FALLBACK LOGIC ---
 
-    // Add warnings if no data found
+    // Add warnings
     if (upShapes.value.length === 0 && downShapes.value.length === 0) {
       warnings.value.push("No route shapes found in KML file");
     } else {
@@ -731,6 +717,34 @@ function parseKML(kmlText) {
 
   } catch (error) {
     warnings.value.push(`Error parsing KML: ${error.message}`);
+  }
+}
+
+// NEW FUNCTION: Auto-generate Stop IDs
+function handleStopIdChange(event, direction, index) {
+  // Only process if editing the first row (index 0)
+  if (index !== 0) return;
+  
+  const newValue = event.target.value;
+  const stops = direction === 'up' ? upStops.value : downStops.value;
+  
+  // Extract prefix and number from the entered value
+  const match = newValue.match(/^(.*?)(\d+)$/);
+  
+  if (match) {
+    const prefix = match[1]; // e.g., "abcd"
+    const startNumber = parseInt(match[2], 10); // e.g., 1 from "abcd001"
+    
+    // Auto-generate IDs for all subsequent stops
+    stops.forEach((stop, i) => {
+      if (i === 0) {
+        stop.stop_id = newValue; // Keep the entered value for first row
+      } else {
+        const newNumber = startNumber + i;
+        const paddedNumber = newNumber.toString().padStart(match[2].length, '0');
+        stop.stop_id = prefix + paddedNumber;
+      }
+    });
   }
 }
 

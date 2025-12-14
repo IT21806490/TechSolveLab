@@ -1,78 +1,253 @@
 <template>
-  <div class="container mx-auto max-w-3xl p-4 font-sans">
-    <h1 class="text-2xl font-bold mb-6">GTFS Frequencies Generator</h1>
+  <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
+    <div class="container mx-auto max-w-4xl">
+      <!-- Header -->
+      <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">
+          📊 GTFS Frequencies Generator
+        </h1>
+        <p class="text-gray-600">
+          Upload your CSV file with trip_id and time columns to generate GTFS frequencies.txt
+        </p>
+      </div>
 
-    <!-- File Upload -->
-    <input
-      type="file"
-      accept=".csv"
-      @change="handleFile"
-      class="mb-4 p-2 border rounded w-full"
-    />
+      <!-- File Upload Card -->
+      <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+          1. Upload CSV File
+        </h2>
+        
+        <!-- Tip Box -->
+        <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4 mb-4">
+          <div class="flex items-start">
+            <svg class="w-5 h-5 text-blue-500 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+            </svg>
+            <div class="flex-1">
+              <h4 class="text-blue-800 font-semibold mb-1">Required CSV Format</h4>
+              <p class="text-blue-700 text-sm mb-2">
+                Your CSV file must contain these two columns:
+              </p>
+              <div class="bg-white rounded p-2 font-mono text-sm border border-blue-200">
+                <div class="text-blue-900"><strong>trip_id</strong>, <strong>time</strong></div>
+                <div class="text-gray-600 text-xs mt-1">Example: route_1_001, 08:00:00</div>
+              </div>
+              <p class="text-blue-700 text-xs mt-2">
+                Time format: HH:MM:SS (24-hour) or H:MM:SS AM/PM (12-hour)
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
+          <input
+            type="file"
+            accept=".csv"
+            @change="handleFile"
+            id="fileInput"
+            class="hidden"
+          />
+          <label
+            for="fileInput"
+            class="cursor-pointer flex flex-col items-center"
+          >
+            <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+            </svg>
+            <span class="text-lg font-medium text-gray-700 mb-1">
+              Click to upload or drag and drop
+            </span>
+            <span class="text-sm text-gray-500">
+              CSV file with trip_id and time columns
+            </span>
+          </label>
+        </div>
+        
+        <!-- File Info -->
+        <div v-if="fileName" class="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg flex items-center">
+          <svg class="w-5 h-5 text-green-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+          </svg>
+          <span class="text-green-800 font-medium">{{ fileName }}</span>
+        </div>
+      </div>
 
-    <!-- Exact Times Input -->
-    <div v-if="frequencies.length" class="mb-6">
-      <label class="block mb-1 font-semibold">Set exact_times for all rows:</label>
-      <input
-        type="number"
-        v-model.number="globalExactTimes"
-        class="p-2 border rounded w-32"
-        placeholder="0"
-      />
+      <!-- Exact Times Configuration -->
+      <div v-if="frequencies.length" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+          2. Configure exact_times
+        </h2>
+        <div class="flex items-center space-x-4">
+          <label class="text-gray-700 font-medium">
+            Set exact_times value for all rows:
+          </label>
+          <div class="flex items-center space-x-2">
+            <button
+              @click="globalExactTimes = 0"
+              :class="[
+                'px-4 py-2 rounded-lg font-medium transition-colors',
+                globalExactTimes === 0
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              ]"
+            >
+              0 (Frequency-based)
+            </button>
+            <button
+              @click="globalExactTimes = 1"
+              :class="[
+                'px-4 py-2 rounded-lg font-medium transition-colors',
+                globalExactTimes === 1
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              ]"
+            >
+              1 (Schedule-based)
+            </button>
+          </div>
+        </div>
+        <p class="text-sm text-gray-500 mt-3">
+          <strong>0:</strong> Trips are not exactly scheduled (frequency-based service) |
+          <strong>1:</strong> Trips are exactly scheduled (timetable-based service)
+        </p>
+      </div>
+
+      <!-- Warnings -->
+      <div v-if="warnings.length" class="bg-orange-50 border-l-4 border-orange-500 rounded-lg p-4 mb-6">
+        <div class="flex items-start">
+          <svg class="w-6 h-6 text-orange-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+          </svg>
+          <div class="flex-1">
+            <h3 class="text-orange-800 font-semibold mb-2">Warnings</h3>
+            <ul class="space-y-1">
+              <li v-for="(w, i) in warnings" :key="i" class="text-orange-700 text-sm">
+                • {{ w }}
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results Summary -->
+      <div v-if="frequencies.length" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+          3. Review Generated Frequencies
+        </h2>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="bg-blue-50 rounded-lg p-4">
+            <div class="text-3xl font-bold text-blue-600">{{ frequencies.length }}</div>
+            <div class="text-sm text-gray-600">Frequency entries</div>
+          </div>
+          <div class="bg-green-50 rounded-lg p-4">
+            <div class="text-3xl font-bold text-green-600">{{ uniqueTrips }}</div>
+            <div class="text-sm text-gray-600">Unique trips</div>
+          </div>
+        </div>
+
+        <!-- Frequencies Table -->
+        <div class="overflow-x-auto rounded-lg border border-gray-200">
+          <table class="w-full">
+            <thead class="bg-gray-50">
+              <tr>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Trip ID
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Start Time
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  End Time
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Headway (sec)
+                </th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                  Exact Times
+                </th>
+              </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+              <tr 
+                v-for="(row, i) in frequencies" 
+                :key="i" 
+                class="hover:bg-gray-50 transition-colors"
+              >
+                <td class="px-4 py-3 text-sm font-medium text-gray-900">
+                  {{ row.trip_id }}
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-700">
+                  {{ row.start_time }}
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-700">
+                  {{ row.end_time }}
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-700">
+                  {{ row.headway_secs }}
+                  <span class="text-xs text-gray-500">({{ formatHeadway(row.headway_secs) }})</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-700">
+                  {{ globalExactTimes }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Download Button -->
+      <div v-if="frequencies.length" class="bg-white rounded-lg shadow-lg p-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+          4. Download Result
+        </h2>
+        <button
+          @click="downloadFrequencies"
+          class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-4 rounded-lg font-semibold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          <span>Download frequencies.txt</span>
+        </button>
+      </div>
+
+      <!-- Empty State -->
+      <div v-if="!frequencies.length && !warnings.length" class="bg-white rounded-lg shadow-lg p-12 text-center">
+        <svg class="w-24 h-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <h3 class="text-xl font-semibold text-gray-700 mb-2">
+          No file uploaded yet
+        </h3>
+        <p class="text-gray-500">
+          Upload a CSV file to get started
+        </p>
+      </div>
     </div>
-
-    <!-- Warnings -->
-    <div v-if="warnings.length" class="mb-4">
-      <h3 class="text-orange-600 font-semibold mb-2">Warnings:</h3>
-      <ul class="list-disc list-inside text-orange-600">
-        <li v-for="(w, i) in warnings" :key="i">{{ w }}</li>
-      </ul>
-    </div>
-
-    <!-- Frequencies Table -->
-    <table
-      v-if="frequencies.length"
-      class="w-full border border-gray-300 border-collapse"
-      cellpadding="5"
-      cellspacing="0"
-    >
-      <thead class="bg-gray-200">
-        <tr>
-          <th class="border border-gray-300 p-2 text-left">trip_id</th>
-          <th class="border border-gray-300 p-2 text-left">start_time</th>
-          <th class="border border-gray-300 p-2 text-left">end_time</th>
-          <th class="border border-gray-300 p-2 text-left">headway_secs</th>
-          <th class="border border-gray-300 p-2 text-left">exact_times</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="(row, i) in frequencies" :key="i" class="odd:bg-white even:bg-gray-50">
-          <td class="border border-gray-300 p-2">{{ row.trip_id }}</td>
-          <td class="border border-gray-300 p-2">{{ row.start_time }}</td>
-          <td class="border border-gray-300 p-2">{{ row.end_time }}</td>
-          <td class="border border-gray-300 p-2">{{ row.headway_secs }}</td>
-          <td class="border border-gray-300 p-2">{{ globalExactTimes }}</td>
-        </tr>
-      </tbody>
-    </table>
-
-    <!-- Download Button -->
-    <button
-      v-if="frequencies.length"
-      @click="downloadFrequencies"
-      class="mt-6 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-    >
-      Download frequencies.txt
-    </button>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { ref, computed, watch } from "vue";
 
 const frequencies = ref([]);
 const warnings = ref([]);
 const globalExactTimes = ref(0);
+const fileName = ref("");
+
+const uniqueTrips = computed(() => {
+  const trips = new Set(frequencies.value.map(f => f.trip_id));
+  return trips.size;
+});
+
+// Format headway in minutes and seconds
+function formatHeadway(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins > 0 && secs > 0) return `${mins}m ${secs}s`;
+  if (mins > 0) return `${mins}m`;
+  return `${secs}s`;
+}
 
 // Parse time string in "h:mm:ss AM/PM" or "hh:mm:ss" 24h format to seconds since midnight
 function parseTimeToSeconds(timeStr) {
@@ -115,6 +290,8 @@ function handleFile(event) {
   const file = event.target.files[0];
   if (!file) return;
 
+  fileName.value = file.name;
+  
   const reader = new FileReader();
   reader.onload = (e) => {
     processCSV(e.target.result);
@@ -218,22 +395,5 @@ function downloadFrequencies() {
 </script>
 
 <style scoped>
-.container {
-  max-width: 800px;
-  margin: 20px auto;
-  font-family: sans-serif;
-}
-h1 {
-  margin-bottom: 20px;
-}
-table {
-  margin-top: 20px;
-  width: 100%;
-  border-collapse: collapse;
-}
-th,
-td {
-  padding: 8px 12px;
-  text-align: left;
-}
+/* Additional custom styles if needed */
 </style>

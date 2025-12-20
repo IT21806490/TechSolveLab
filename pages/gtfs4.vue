@@ -1,7 +1,7 @@
 <template>
   <div class="container mx-auto max-w-4xl py-8">
     <h1 class="text-3xl font-semibold text-gray-800 mb-6">
-      ⏱️ GTFS File Checker
+      ⏱️ GTFS File Validator
     </h1>
 
     <!-- File Upload -->
@@ -28,12 +28,12 @@
       <p>{{ errorMessage }}</p>
     </div>
 
-    <!-- File Check Results -->
-    <div v-if="fileStatus && !errorMessage" class="mt-4">
-      <h2 class="text-xl font-semibold text-gray-800">File Check Results:</h2>
+    <!-- Validation Results -->
+    <div v-if="validationResults && !errorMessage" class="mt-4">
+      <h2 class="text-xl font-semibold text-gray-800">Validation Results:</h2>
       <ul class="mt-4">
-        <li v-for="(status, file) in fileStatus" :key="file" class="py-1">
-          <span :style="status === 'missing' ? 'color: red' : 'color: green'">{{ file }}: {{ status }}</span>
+        <li v-for="(status, file) in validationResults" :key="file" class="py-1">
+          <span :style="status.valid ? 'color: green' : 'color: red'">{{ file }}: {{ status.message }}</span>
         </li>
       </ul>
     </div>
@@ -46,7 +46,7 @@ import { ref } from 'vue';
 // State variables
 const isProcessing = ref(false);
 const errorMessage = ref('');
-const fileStatus = ref({});
+const validationResults = ref({});
 
 // Handle file upload
 function handleFileUpload(event) {
@@ -57,7 +57,7 @@ function handleFileUpload(event) {
   // Start processing
   isProcessing.value = true;
   errorMessage.value = '';
-  fileStatus.value = {};
+  validationResults.value = {};
 
   // Create a web worker to handle ZIP processing
   const workerBlob = new Blob([`
@@ -73,19 +73,74 @@ function handleFileUpload(event) {
         try {
           const zip = new JSZip();
           zip.loadAsync(zipData).then(function(zip) {
-            const requiredFiles = ['stops.txt', 'routes.txt', 'trips.txt'];
+            const requiredFiles = ['stops.txt', 'routes.txt', 'trips.txt', 'shapes.txt', 'calendar.txt'];
             const filesStatus = {};
+            const validationResults = {};
 
             // Check if required files are present
             requiredFiles.forEach(fileName => {
               if (zip.files[fileName]) {
-                filesStatus[fileName] = 'found';
+                filesStatus[fileName] = { valid: true, message: 'Found' };
               } else {
-                filesStatus[fileName] = 'missing';
+                filesStatus[fileName] = { valid: false, message: 'Missing' };
               }
             });
 
-            postMessage({ status: 'success', files: filesStatus });
+            // Validate each file's data
+            function validateFileData(fileName, fileContent) {
+              const rows = fileContent.split('\n').map(row => row.trim());
+              const header = rows[0].split(',');
+              const errors = [];
+
+              switch (fileName) {
+                case 'stops.txt':
+                  const stopIdIndex = header.indexOf('stop_id');
+                  const stopNameIndex = header.indexOf('stop_name');
+                  if (stopIdIndex === -1 || stopNameIndex === -1) {
+                    errors.push('Missing required columns: stop_id, stop_name');
+                  }
+                  // Add more validations as needed
+                  break;
+
+                case 'routes.txt':
+                  const routeIdIndex = header.indexOf('route_id');
+                  const routeShortNameIndex = header.indexOf('route_short_name');
+                  if (routeIdIndex === -1 || routeShortNameIndex === -1) {
+                    errors.push('Missing required columns: route_id, route_short_name');
+                  }
+                  break;
+
+                case 'trips.txt':
+                  const tripIdIndex = header.indexOf('trip_id');
+                  const routeIdTripIndex = header.indexOf('route_id');
+                  if (tripIdIndex === -1 || routeIdTripIndex === -1) {
+                    errors.push('Missing required columns: trip_id, route_id');
+                  }
+                  break;
+
+                // Additional file checks for shapes.txt, calendar.txt, etc.
+              }
+
+              return errors;
+            }
+
+            // Validate all files
+            for (let fileName in zip.files) {
+              const file = zip.files[fileName];
+              if (requiredFiles.includes(fileName)) {
+                file.async('text').then(function(content) {
+                  const validationErrors = validateFileData(fileName, content);
+                  if (validationErrors.length > 0) {
+                    validationResults[fileName] = { valid: false, message: validationErrors.join(', ') };
+                  } else {
+                    validationResults[fileName] = { valid: true, message: 'Valid data' };
+                  }
+
+                  // Send results when done
+                  postMessage({ status: 'success', filesStatus: filesStatus, validationResults: validationResults });
+                });
+              }
+            }
           }).catch((err) => {
             postMessage({ status: 'error', message: 'Error parsing the ZIP file. It may be corrupted or invalid.' });
           });
@@ -108,7 +163,7 @@ function handleFileUpload(event) {
     if (result.status === 'error') {
       errorMessage.value = result.message;
     } else {
-      fileStatus.value = result.files;
+      validationResults.value = result.validationResults;
     }
   };
 

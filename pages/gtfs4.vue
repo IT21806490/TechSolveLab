@@ -508,13 +508,15 @@ async function processZip(buffer) {
       const uniqueIds = new Set();
       const idField = spec.primaryKey;
 
-      // OPTIMIZED: Sample-based validation for large files
+      // FAST validation - check ALL rows but optimized
       const totalRows = parsed.data.length;
-      const shouldSample = totalRows > 10000;
-      const sampleSize = shouldSample ? Math.min(1000, Math.floor(totalRows * 0.1)) : totalRows;
-      const sampleInterval = shouldSample ? Math.floor(totalRows / sampleSize) : 1;
+      
+      // Batch error tracking to avoid excessive array operations
+      const errorBatch = [];
+      let duplicateCount = 0;
+      let invalidCoordCount = 0;
 
-      for (let i = 0; i < totalRows; i += sampleInterval) {
+      for (let i = 0; i < totalRows; i++) {
         const row = parsed.data[i];
         const lineNumber = i + 2;
 
@@ -525,58 +527,83 @@ async function processZip(buffer) {
           
           if (idValue) {
             if (uniqueIds.has(idValue)) {
-              results.errors.push({
-                code: 'duplicate_id',
-                message: `Duplicate ${idField}: '${idValue}'`,
-                file: filename,
-                line: lineNumber,
-                field: idField,
-                suggestion: `Ensure all ${idField} values are unique`
-              });
-              results.summary.errorCount++;
-              results.summary.isValid = false;
-              fileResult.errors++;
-              fileResult.status = 'error';
+              // Limit duplicate errors to first 100 to avoid massive reports
+              if (duplicateCount < 100) {
+                errorBatch.push({
+                  code: 'duplicate_id',
+                  message: `Duplicate ${idField}: '${idValue}'`,
+                  file: filename,
+                  line: lineNumber,
+                  field: idField,
+                  suggestion: `Ensure all ${idField} values are unique`
+                });
+              }
+              duplicateCount++;
             }
             uniqueIds.add(idValue);
           }
         }
 
         // Check stops coordinates - ERROR for invalid values
-        if (filename === 'stops.txt' && i < 100) { // Only check first 100 stops for speed
+        if (filename === 'stops.txt') {
           const lat = parseFloat(row[headerMap['stop_lat']]);
           const lon = parseFloat(row[headerMap['stop_lon']]);
           
           if (row[headerMap['stop_lat']] && (isNaN(lat) || lat < -90 || lat > 90)) {
-            results.errors.push({
-              code: 'location_without_parent_station',
-              message: `Invalid latitude value: ${row[headerMap['stop_lat']]}`,
-              file: filename,
-              line: lineNumber,
-              field: 'stop_lat',
-              suggestion: 'Latitude must be between -90 and 90'
-            });
-            results.summary.errorCount++;
-            results.summary.isValid = false;
-            fileResult.errors++;
-            fileResult.status = 'error';
+            if (invalidCoordCount < 100) {
+              errorBatch.push({
+                code: 'location_without_parent_station',
+                message: `Invalid latitude value: ${row[headerMap['stop_lat']]}`,
+                file: filename,
+                line: lineNumber,
+                field: 'stop_lat',
+                suggestion: 'Latitude must be between -90 and 90'
+              });
+            }
+            invalidCoordCount++;
           }
           
           if (row[headerMap['stop_lon']] && (isNaN(lon) || lon < -180 || lon > 180)) {
-            results.errors.push({
-              code: 'location_without_parent_station',
-              message: `Invalid longitude value: ${row[headerMap['stop_lon']]}`,
-              file: filename,
-              line: lineNumber,
-              field: 'stop_lon',
-              suggestion: 'Longitude must be between -180 and 180'
-            });
-            results.summary.errorCount++;
-            results.summary.isValid = false;
-            fileResult.errors++;
-            fileResult.status = 'error';
+            if (invalidCoordCount < 100) {
+              errorBatch.push({
+                code: 'location_without_parent_station',
+                message: `Invalid longitude value: ${row[headerMap['stop_lon']]}`,
+                file: filename,
+                line: lineNumber,
+                field: 'stop_lon',
+                suggestion: 'Longitude must be between -180 and 180'
+              });
+            }
+            invalidCoordCount++;
           }
         }
+      }
+
+      // Add batched errors
+      results.errors.push(...errorBatch);
+      results.summary.errorCount += errorBatch.length;
+      if (errorBatch.length > 0) {
+        results.summary.isValid = false;
+        fileResult.errors += errorBatch.length;
+        fileResult.status = 'error';
+      }
+
+      // Add summary if we hit limits
+      if (duplicateCount > 100) {
+        results.errors.push({
+          code: 'duplicate_id',
+          message: `... and ${duplicateCount - 100} more duplicate ${idField} errors`,
+          file: filename,
+          suggestion: 'Review all duplicate IDs in this file'
+        });
+      }
+      if (invalidCoordCount > 100) {
+        results.errors.push({
+          code: 'location_without_parent_station',
+          message: `... and ${invalidCoordCount - 100} more coordinate errors`,
+          file: filename,
+          suggestion: 'Review all coordinates in this file'
+        });
       }
 
       results.fileDetails[filename] = fileResult;
@@ -823,6 +850,9 @@ async function performFastCrossFileValidations(parsedFiles, results) {
     const stopTimesData = parsedFiles['stop_times.txt']?.parsed;
     const tripsData = parsedFiles['trips.txt']?.parsed;
     const routesData = parsedFiles['routes.txt']?.parsed;
+    const calendarData = parsedFiles['calendar.txt']?.parsed;
+    const calendarDatesData = parsedFiles['calendar_dates.txt']?.parsed;
+    const agencyData = parsedFiles['agency.txt']?.parsed;
 
     if (!stopsData || !stopTimesData || !tripsData) return;
 
@@ -830,63 +860,174 @@ async function performFastCrossFileValidations(parsedFiles, results) {
     const validStopIds = new Set(stopsData.data.map(stop => stop.stop_id).filter(Boolean));
     const validTripIds = new Set(tripsData.data.map(trip => trip.trip_id).filter(Boolean));
     const validRouteIds = routesData ? new Set(routesData.data.map(route => route.route_id).filter(Boolean)) : new Set();
+    
+    // Build service IDs set
+    const validServiceIds = new Set();
+    if (calendarData) {
+      calendarData.data.forEach(cal => {
+        if (cal.service_id) validServiceIds.add(cal.service_id);
+      });
+    }
+    if (calendarDatesData) {
+      calendarDatesData.data.forEach(calDate => {
+        if (calDate.service_id) validServiceIds.add(calDate.service_id);
+      });
+    }
 
-    // Sample-based foreign key validation for SPEED
+    // Build agency IDs set
+    const validAgencyIds = agencyData ? new Set(agencyData.data.map(agency => agency.agency_id).filter(Boolean)) : new Set();
+
+    // Batch warnings to improve performance
+    const warningBatch = [];
+    let fkViolationCount = { trip_id: 0, stop_id: 0, route_id: 0, service_id: 0, agency_id: 0 };
+
+    // Foreign key validation for stop_times - CHECK ALL but batch warnings
     const totalStopTimes = stopTimesData.data.length;
-    const sampleSize = Math.min(1000, Math.floor(totalStopTimes * 0.1));
-    const sampleInterval = Math.max(1, Math.floor(totalStopTimes / sampleSize));
-
-    let stopTimeRowNum = 2;
-    for (let i = 0; i < totalStopTimes; i += sampleInterval) {
+    for (let i = 0; i < totalStopTimes; i++) {
       const stopTime = stopTimesData.data[i];
-      stopTimeRowNum = i + 2;
+      const stopTimeRowNum = i + 2;
 
-      // Check trip_id - WARNING
+      // Check trip_id - WARNING (limit to first 100 of each type)
       if (stopTime.trip_id && !validTripIds.has(stopTime.trip_id)) {
-        results.warnings.push({
-          code: 'foreign_key_violation',
-          message: `Foreign key violation: trip_id '${stopTime.trip_id}' in stop_times.txt does not exist in trips.txt`,
-          file: 'stop_times.txt',
-          line: stopTimeRowNum,
-          field: 'trip_id',
-          suggestion: `Ensure trip_id '${stopTime.trip_id}' exists in trips.txt`
-        });
-        results.summary.warningCount++;
+        if (fkViolationCount.trip_id < 100) {
+          warningBatch.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: trip_id '${stopTime.trip_id}' in stop_times.txt does not exist in trips.txt`,
+            file: 'stop_times.txt',
+            line: stopTimeRowNum,
+            field: 'trip_id',
+            suggestion: `Ensure trip_id '${stopTime.trip_id}' exists in trips.txt`
+          });
+        }
+        fkViolationCount.trip_id++;
       }
 
       // Check stop_id - WARNING
       if (stopTime.stop_id && !validStopIds.has(stopTime.stop_id)) {
-        results.warnings.push({
-          code: 'foreign_key_violation',
-          message: `Foreign key violation: stop_id '${stopTime.stop_id}' in stop_times.txt does not exist in stops.txt`,
-          file: 'stop_times.txt',
-          line: stopTimeRowNum,
-          field: 'stop_id',
-          suggestion: `Ensure stop_id '${stopTime.stop_id}' exists in stops.txt`
-        });
-        results.summary.warningCount++;
+        if (fkViolationCount.stop_id < 100) {
+          warningBatch.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: stop_id '${stopTime.stop_id}' in stop_times.txt does not exist in stops.txt`,
+            file: 'stop_times.txt',
+            line: stopTimeRowNum,
+            field: 'stop_id',
+            suggestion: `Ensure stop_id '${stopTime.stop_id}' exists in stops.txt`
+          });
+        }
+        fkViolationCount.stop_id++;
+      }
+
+      // Batch processing - add warnings every 1000 rows to avoid memory issues
+      if (i % 1000 === 0 && warningBatch.length > 0) {
+        results.warnings.push(...warningBatch);
+        results.summary.warningCount += warningBatch.length;
+        warningBatch.length = 0;
       }
     }
 
-    // Check route_id references in trips - WARNING
-    if (routesData) {
-      const sampleTrips = Math.min(500, Math.floor(tripsData.data.length * 0.1));
-      const tripInterval = Math.max(1, Math.floor(tripsData.data.length / sampleTrips));
-      
-      for (let i = 0; i < tripsData.data.length; i += tripInterval) {
-        const trip = tripsData.data[i];
-        if (trip.route_id && !validRouteIds.has(trip.route_id)) {
-          results.warnings.push({
+    // Check route_id and service_id in trips - CHECK ALL
+    for (let i = 0; i < tripsData.data.length; i++) {
+      const trip = tripsData.data[i];
+      const tripRowNum = i + 2;
+
+      if (trip.route_id && !validRouteIds.has(trip.route_id)) {
+        if (fkViolationCount.route_id < 100) {
+          warningBatch.push({
             code: 'foreign_key_violation',
             message: `Foreign key violation: route_id '${trip.route_id}' in trips.txt does not exist in routes.txt`,
             file: 'trips.txt',
-            line: i + 2,
+            line: tripRowNum,
             field: 'route_id',
             suggestion: `Ensure route_id '${trip.route_id}' exists in routes.txt`
           });
-          results.summary.warningCount++;
+        }
+        fkViolationCount.route_id++;
+      }
+
+      if (validServiceIds.size > 0 && trip.service_id && !validServiceIds.has(trip.service_id)) {
+        if (fkViolationCount.service_id < 100) {
+          warningBatch.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: service_id '${trip.service_id}' in trips.txt does not exist in calendar.txt or calendar_dates.txt`,
+            file: 'trips.txt',
+            line: tripRowNum,
+            field: 'service_id',
+            suggestion: `Ensure service_id '${trip.service_id}' exists in calendar.txt or calendar_dates.txt`
+          });
+        }
+        fkViolationCount.service_id++;
+      }
+
+      // Batch processing
+      if (i % 500 === 0 && warningBatch.length > 0) {
+        results.warnings.push(...warningBatch);
+        results.summary.warningCount += warningBatch.length;
+        warningBatch.length = 0;
+      }
+    }
+
+    // Check agency_id in routes if agency.txt exists
+    if (routesData && validAgencyIds.size > 0) {
+      for (let i = 0; i < routesData.data.length; i++) {
+        const route = routesData.data[i];
+        if (route.agency_id && !validAgencyIds.has(route.agency_id)) {
+          if (fkViolationCount.agency_id < 100) {
+            warningBatch.push({
+              code: 'foreign_key_violation',
+              message: `Foreign key violation: agency_id '${route.agency_id}' in routes.txt does not exist in agency.txt`,
+              file: 'routes.txt',
+              line: i + 2,
+              field: 'agency_id',
+              suggestion: `Ensure agency_id '${route.agency_id}' exists in agency.txt`
+            });
+          }
+          fkViolationCount.agency_id++;
         }
       }
+    }
+
+    // Add remaining batched warnings
+    if (warningBatch.length > 0) {
+      results.warnings.push(...warningBatch);
+      results.summary.warningCount += warningBatch.length;
+    }
+
+    // Add summary warnings if we hit limits
+    if (fkViolationCount.trip_id > 100) {
+      results.warnings.push({
+        code: 'foreign_key_violation',
+        message: `... and ${fkViolationCount.trip_id - 100} more trip_id foreign key violations`,
+        file: 'stop_times.txt',
+        suggestion: 'Review all trip_id references in stop_times.txt'
+      });
+      results.summary.warningCount++;
+    }
+    if (fkViolationCount.stop_id > 100) {
+      results.warnings.push({
+        code: 'foreign_key_violation',
+        message: `... and ${fkViolationCount.stop_id - 100} more stop_id foreign key violations`,
+        file: 'stop_times.txt',
+        suggestion: 'Review all stop_id references in stop_times.txt'
+      });
+      results.summary.warningCount++;
+    }
+    if (fkViolationCount.route_id > 100) {
+      results.warnings.push({
+        code: 'foreign_key_violation',
+        message: `... and ${fkViolationCount.route_id - 100} more route_id foreign key violations`,
+        file: 'trips.txt',
+        suggestion: 'Review all route_id references in trips.txt'
+      });
+      results.summary.warningCount++;
+    }
+    if (fkViolationCount.service_id > 100) {
+      results.warnings.push({
+        code: 'foreign_key_violation',
+        message: `... and ${fkViolationCount.service_id - 100} more service_id foreign key violations`,
+        file: 'trips.txt',
+        suggestion: 'Review all service_id references in trips.txt'
+      });
+      results.summary.warningCount++;
     }
 
   } catch (error) {

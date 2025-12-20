@@ -33,6 +33,14 @@
           </label>
         </div>
 
+        <!-- Display Feedback During File Processing -->
+        <div v-if="isProcessing" class="text-center mt-4 text-gray-500">
+          <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16M4 12h16M4 20h16"></path>
+          </svg>
+          <p>Processing your GTFS file...</p>
+        </div>
+
         <div v-if="gtfsFileName" class="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
           <div class="flex items-center justify-between">
             <div class="flex items-center">
@@ -62,9 +70,10 @@
 <script setup>
 import { ref } from 'vue';
 
-// Reactive state for file name and validation report
+// Reactive state for file name, validation report, and processing status
 const gtfsFileName = ref('');
 const report = ref('');
+const isProcessing = ref(false);
 
 // Handle GTFS file upload and validation
 function handleGTFSFile(event) {
@@ -72,6 +81,7 @@ function handleGTFSFile(event) {
   if (!file) return;
 
   gtfsFileName.value = file.name;
+  isProcessing.value = true;  // Show loading indicator
 
   // Create a reader to read the ZIP file as a binary
   const reader = new FileReader();
@@ -91,13 +101,17 @@ function handleGTFSFile(event) {
       if (missingFiles.length === 0) {
         report.value = "GTFS ZIP file is valid!";
       } else {
-        report.value = `Validation Report:\n${missingFiles.join('\n')}`;
+        report.value = `Validation Report:\nMissing files:\n${missingFiles.join('\n')}`;
       }
 
       // Close the zip reader after processing
       zipReader.close();
+
+      // Hide processing spinner
+      isProcessing.value = false;
     }).catch((error) => {
       report.value = `Error: Unable to extract or parse the ZIP file. ${error}`;
+      isProcessing.value = false;
     });
   };
 

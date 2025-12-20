@@ -72,41 +72,35 @@ function handleGTFSFile(event) {
   if (!file) return;
 
   gtfsFileName.value = file.name;
-  
-  // Read the file as binary string using FileReader
+
+  // Create a reader to read the ZIP file as a binary
   const reader = new FileReader();
   reader.onload = function (e) {
-    const fileContent = e.target.result;
+    const arrayBuffer = e.target.result;
 
-    try {
-      // Unzip the content using pako
-      const uint8Array = new Uint8Array(fileContent);
-      const decompressed = pako.ungzip(uint8Array, { to: 'string' });
-      
-      // Split content into individual GTFS files
-      const files = decompressed.split('\n\n');
-      const fileNames = files.map((file, index) => `file_${index + 1}.txt`);
-      
-      // Validate GTFS files (e.g., check if 'stops.txt' exists)
-      const missingFiles = [];
+    // Open the ZIP file using zip.js
+    const zipReader = new zip.ZipReader(new zip.BlobReader(new Blob([arrayBuffer])));
+
+    zipReader.getEntries().then(entries => {
+      const fileNames = entries.map(entry => entry.filename);
       const requiredFiles = ['stops.txt', 'routes.txt', 'trips.txt', 'stop_times.txt'];
 
-      requiredFiles.forEach(file => {
-        if (!fileNames.includes(file)) {
-          missingFiles.push(`${file} is missing`);
-        }
-      });
+      // Check if all required files are present
+      const missingFiles = requiredFiles.filter(file => !fileNames.includes(file));
 
       if (missingFiles.length === 0) {
         report.value = "GTFS ZIP file is valid!";
       } else {
         report.value = `Validation Report:\n${missingFiles.join('\n')}`;
       }
-    } catch (error) {
-      report.value = `Error: Unable to extract or parse the ZIP file.`;
-    }
+
+      // Close the zip reader after processing
+      zipReader.close();
+    }).catch((error) => {
+      report.value = `Error: Unable to extract or parse the ZIP file. ${error}`;
+    });
   };
-  
+
   reader.readAsArrayBuffer(file);
 }
 

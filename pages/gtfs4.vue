@@ -338,7 +338,6 @@ async function processZip(buffer) {
     progress.value = 10;
     processingStatus.value = 'Loading validation library...';
     
-    // Load JSZip and Papa Parse from CDN
     if (!window.JSZip) {
       const script = document.createElement('script');
       script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
@@ -378,13 +377,11 @@ async function processZip(buffer) {
       statistics: {}
     };
 
-    // Define GTFS specification
     const gtfsSpec = getGTFSSpecification();
 
     progress.value = 40;
     processingStatus.value = 'Validating file structure...';
 
-    // Validate all files
     let fileIndex = 0;
     const totalFiles = Object.keys(gtfsSpec).length;
 
@@ -429,7 +426,6 @@ async function processZip(buffer) {
 
       results.summary.filesValidated++;
 
-      // Read and parse file
       const content = await fileData.async('text');
       const parsed = window.Papa.parse(content, {
         header: true,
@@ -446,7 +442,6 @@ async function processZip(buffer) {
         warnings: 0
       };
 
-      // Validate columns
       const headers = parsed.meta.fields || [];
       
       for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
@@ -467,7 +462,6 @@ async function processZip(buffer) {
         }
       }
 
-      // Validate data rows
       const headerMap = {};
       headers.forEach((h, i) => {
         headerMap[h.toLowerCase()] = h;
@@ -477,9 +471,8 @@ async function processZip(buffer) {
       const idField = spec.primaryKey;
 
       parsed.data.forEach((row, rowIndex) => {
-        const lineNumber = rowIndex + 2; // +2 for header and 0-index
+        const lineNumber = rowIndex + 2;
 
-        // Check for empty required fields
         for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
           if (fieldSpec.required) {
             const actualFieldName = headerMap[fieldName.toLowerCase()];
@@ -499,7 +492,6 @@ async function processZip(buffer) {
               fileResult.errors++;
               fileResult.status = 'error';
             } else if (fieldSpec.type) {
-              // Validate data types
               const validationError = validateFieldType(value, fieldSpec.type, fieldName, filename, lineNumber);
               if (validationError) {
                 results.errors.push(validationError);
@@ -512,7 +504,6 @@ async function processZip(buffer) {
           }
         }
 
-        // Check for duplicate IDs
         if (idField) {
           const actualIdField = headerMap[idField.toLowerCase()];
           const idValue = row[actualIdField];
@@ -536,7 +527,6 @@ async function processZip(buffer) {
           }
         }
 
-        // Validate coordinates for stops.txt
         if (filename === 'stops.txt') {
           const lat = parseFloat(row[headerMap['stop_lat']]);
           const lon = parseFloat(row[headerMap['stop_lon']]);
@@ -555,9 +545,23 @@ async function processZip(buffer) {
             fileResult.errors++;
             fileResult.status = 'error';
           }
+          
+          if (isNaN(lon) || lon < -180 || lon > 180) {
+            results.errors.push({
+              code: 'INVALID_LONGITUDE',
+              message: `Invalid longitude value: ${row[headerMap['stop_lon']]}`,
+              file: filename,
+              line: lineNumber,
+              field: 'stop_lon',
+              suggestion: 'Longitude must be between -180 and 180'
+            });
+            results.summary.errorCount++;
+            results.summary.isValid = false;
+            fileResult.errors++;
+            fileResult.status = 'error';
+          }
         }
 
-        // Validate time format for stop_times.txt
         if (filename === 'stop_times.txt') {
           const arrivalTime = row[headerMap['arrival_time']];
           const departureTime = row[headerMap['departure_time']];
@@ -593,7 +597,6 @@ async function processZip(buffer) {
           }
         }
 
-        // Validate route_type in routes.txt
         if (filename === 'routes.txt') {
           const routeType = row[headerMap['route_type']];
           const validRouteTypes = ['0', '1', '2', '3', '4', '5', '6', '7', '11', '12'];
@@ -615,7 +618,6 @@ async function processZip(buffer) {
 
       results.fileDetails[filename] = fileResult;
 
-      // Calculate statistics
       if (filename === 'stops.txt') {
         results.statistics.total_stops = parsed.data.length;
       } else if (filename === 'routes.txt') {
@@ -629,7 +631,6 @@ async function processZip(buffer) {
       }
     }
 
-    // Calculate quality score
     const totalIssues = results.summary.errorCount + (results.summary.warningCount * 0.5);
     results.summary.score = Math.max(0, Math.round(100 - (totalIssues * 2)));
 
@@ -1109,18 +1110,10 @@ function generateHTMLReport(results) {
 </body>
 </html>`;
 }
-            fileResult.errors++;
-            fileResult.status = 'error';
-          }
-          
-          if (isNaN(lon) || lon < -180 || lon > 180) {
-            results.errors.push({
-              code: 'INVALID_LONGITUDE',
-              message: `Invalid longitude value: ${row[headerMap['stop_lon']]}`,
-              file: filename,
-              line: lineNumber,
-              field: 'stop_lon',
-              suggestion: 'Longitude must be between -180 and 180'
-            });
-            results.summary.errorCount++;
-            results.summary.isValid = false;
+</script>
+
+<style scoped>
+.container {
+  max-width: 1200px;
+}
+</style>

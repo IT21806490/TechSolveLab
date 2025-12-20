@@ -9,7 +9,7 @@
               ⏱️ GTFS File Validator
             </h1>
             <p class="text-gray-600">
-              Upload your GTFS files for fast validation
+              Upload your GTFS ZIP files for fast validation
             </p>
           </div>
         </div>
@@ -78,7 +78,7 @@ function handleFileUpload(event) {
     const zipBuffer = event.target.result;
 
     try {
-      processZip(zipBuffer, file.name);
+      processZip(zipBuffer);
     } catch (error) {
       loading.value = false;
       validationResults.value = `Error: ${error.message}`;
@@ -89,57 +89,78 @@ function handleFileUpload(event) {
   reader.readAsArrayBuffer(file);
 }
 
-function processZip(buffer, fileName) {
-  const zip = new JSZip();
-  zip.loadAsync(buffer).then(function (zipContent) {
-    let results = {
-      errors: [],
-      fileStructure: {
-        stops: false,
-        routes: false,
-        trips: false
+async function processZip(buffer) {
+  // Create a Blob from the ArrayBuffer
+  const blob = new Blob([buffer]);
+  const zipContent = await unzipBlob(blob);
+
+  let results = {
+    errors: [],
+    fileStructure: {
+      stops: false,
+      routes: false,
+      trips: false
+    }
+  };
+
+  // List of required GTFS files
+  const requiredFiles = ['stops.txt', 'routes.txt', 'trips.txt'];
+
+  // Check if each required file exists
+  for (const fileName of requiredFiles) {
+    if (zipContent[fileName]) {
+      results.fileStructure[fileName.replace('.txt', '')] = true;
+    } else {
+      results.errors.push(`${fileName} not found`);
+    }
+  }
+
+  // Validate content of the GTFS files
+  await validateFile(zipContent, 'stops.txt', results);
+  await validateFile(zipContent, 'routes.txt', results);
+  await validateFile(zipContent, 'trips.txt', results);
+
+  // Show the validation result
+  loading.value = false;
+  validationResults.value = JSON.stringify(results, null, 2);
+}
+
+// Extracts files from the zip blob
+function unzipBlob(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      try {
+        const zip = new JSZip();
+        zip.loadAsync(event.target.result).then(zipFiles => {
+          resolve(zipFiles.files);
+        }).catch(err => {
+          reject('Error unzipping the file');
+        });
+      } catch (err) {
+        reject('Error reading ZIP file');
       }
     };
-
-    // List of required GTFS files
-    const requiredFiles = ['stops.txt', 'routes.txt', 'trips.txt'];
-
-    // Check if each required file exists
-    requiredFiles.forEach(file => {
-      if (zipContent.files[file]) {
-        results.fileStructure[file.replace('.txt', '')] = true;
-      } else {
-        results.errors.push(`${file} not found`);
-      }
-    });
-
-    // Validate content of the GTFS files
-    validateFile(zipContent, 'stops.txt', results);
-    validateFile(zipContent, 'routes.txt', results);
-    validateFile(zipContent, 'trips.txt', results);
-
-    // Show the validation result
-    loading.value = false;
-    validationResults.value = JSON.stringify(results, null, 2);
+    reader.readAsArrayBuffer(blob);
   });
 }
 
-function validateFile(zipContent, fileName, results) {
-  const file = zipContent.files[fileName];
+// Validates the GTFS files asynchronously
+async function validateFile(zipContent, fileName, results) {
+  const file = zipContent[fileName];
   if (!file) return;
 
-  // Read the file's content and check columns
-  file.async('text').then(content => {
-    if (fileName === 'stops.txt' && !content.includes('stop_id')) {
-      results.errors.push('Missing stop_id column in stops.txt');
-    }
-    if (fileName === 'routes.txt' && !content.includes('route_id')) {
-      results.errors.push('Missing route_id column in routes.txt');
-    }
-    if (fileName === 'trips.txt' && !content.includes('trip_id')) {
-      results.errors.push('Missing trip_id column in trips.txt');
-    }
-  });
+  const content = await file.async('text');
+
+  if (fileName === 'stops.txt' && !content.includes('stop_id')) {
+    results.errors.push('Missing stop_id column in stops.txt');
+  }
+  if (fileName === 'routes.txt' && !content.includes('route_id')) {
+    results.errors.push('Missing route_id column in routes.txt');
+  }
+  if (fileName === 'trips.txt' && !content.includes('trip_id')) {
+    results.errors.push('Missing trip_id column in trips.txt');
+  }
 }
 </script>
 

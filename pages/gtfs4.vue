@@ -290,7 +290,7 @@
           </li>
           <li class="flex items-start space-x-2">
             <span>✓</span>
-            <span>Comprehensive validation - Checks all GTFS specifications</span>
+            <span>Comprehensive validation - Checks all GTFS specifications including foreign keys</span>
           </li>
           <li class="flex items-start space-x-2">
             <span>✓</span>
@@ -417,7 +417,7 @@ async function processZip(buffer) {
 
     for (const [filename, spec] of Object.entries(gtfsSpec)) {
       fileIndex++;
-      progress.value = 40 + Math.floor((fileIndex / totalFiles) * 40);
+      progress.value = 40 + Math.floor((fileIndex / totalFiles) * 30);
       processingStatus.value = `Validating ${filename}...`;
 
       const fileData = zipContent.files[filename];
@@ -644,7 +644,6 @@ async function processZip(buffer) {
             if (fileResult.status !== 'error') fileResult.status = 'warning';
           }
 
-          // Check route_short_name length
           const routeShortName = row[headerMap['route_short_name']];
           if (routeShortName && routeShortName.length > 12) {
             results.warnings.push({
@@ -659,7 +658,6 @@ async function processZip(buffer) {
             if (fileResult.status !== 'error') fileResult.status = 'warning';
           }
 
-          // Check for mixed case in recommended fields
           const routeLongName = row[headerMap['route_long_name']];
           if (routeLongName && hasMixedCase(routeLongName)) {
             results.warnings.push({
@@ -688,7 +686,6 @@ async function processZip(buffer) {
           }
         }
 
-        // Check for mixed case in stop names
         if (filename === 'stops.txt') {
           const stopName = row[headerMap['stop_name']];
           if (stopName && hasMixedCase(stopName)) {
@@ -721,15 +718,14 @@ async function processZip(buffer) {
       }
     }
 
-    // Post-processing validations (cross-file validations)
-    progress.value = 80;
-    processingStatus.value = 'Performing cross-file validations...';
+    // Post-processing validations (cross-file validations INCLUDING FOREIGN KEYS)
+    progress.value = 70;
+    processingStatus.value = 'Performing cross-file and foreign key validations...';
     await performCrossFileValidations(zipContent, results);
 
     progress.value = 90;
     processingStatus.value = 'Generating feed information...';
 
-    // Add feed information to results if available
     if (zipContent.files['feed_info.txt']) {
       const feedInfoContent = await zipContent.files['feed_info.txt'].async('text');
       const feedInfoParsed = window.Papa.parse(feedInfoContent, { header: true, skipEmptyLines: true });
@@ -746,7 +742,6 @@ async function processZip(buffer) {
       }
     }
 
-    // Add agencies to results
     if (zipContent.files['agency.txt']) {
       const agencyContent = await zipContent.files['agency.txt'].async('text');
       const agencyParsed = window.Papa.parse(agencyContent, { header: true, skipEmptyLines: true });
@@ -1037,7 +1032,6 @@ function isValidTimeFormat(time) {
 }
 
 function hasMixedCase(str) {
-  // Check if string has both uppercase and lowercase letters (not all upper or all lower)
   const hasUpper = /[A-Z]/.test(str);
   const hasLower = /[a-z]/.test(str);
   return hasUpper && hasLower && str !== str.toLowerCase() && str !== str.toUpperCase();
@@ -1045,12 +1039,14 @@ function hasMixedCase(str) {
 
 async function performCrossFileValidations(zipContent, results) {
   try {
-    // Load all necessary files
     const stopsFile = zipContent.files['stops.txt'];
     const stopTimesFile = zipContent.files['stop_times.txt'];
     const tripsFile = zipContent.files['trips.txt'];
     const shapesFile = zipContent.files['shapes.txt'];
     const routesFile = zipContent.files['routes.txt'];
+    const agencyFile = zipContent.files['agency.txt'];
+    const calendarFile = zipContent.files['calendar.txt'];
+    const calendarDatesFile = zipContent.files['calendar_dates.txt'];
 
     if (!stopsFile || !stopTimesFile || !tripsFile) return;
 
@@ -1063,6 +1059,173 @@ async function performCrossFileValidations(zipContent, results) {
     
     const tripsContent = await tripsFile.async('text');
     const tripsParsed = window.Papa.parse(tripsContent, { header: true, skipEmptyLines: true });
+
+    // Build foreign key sets for validation
+    const validStopIds = new Set();
+    stopsParsed.data.forEach(stop => {
+      if (stop.stop_id) validStopIds.add(stop.stop_id);
+    });
+
+    const validTripIds = new Set();
+    const validRouteIdsFromTrips = new Set();
+    const validServiceIds = new Set();
+    tripsParsed.data.forEach(trip => {
+      if (trip.trip_id) validTripIds.add(trip.trip_id);
+      if (trip.route_id) validRouteIdsFromTrips.add(trip.route_id);
+      if (trip.service_id) validServiceIds.add(trip.service_id);
+    });
+
+    // Parse routes if available
+    if (routesFile) {
+      const routesContent = await routesFile.async('text');
+      const routesParsed = window.Papa.parse(routesContent, { header: true, skipEmptyLines: true });
+      const routeIds = new Set();
+      const agencyIds = new Set();
+      
+      routesParsed.data.forEach(route => {
+        if (route.route_id) routeIds.add(route.route_id);
+        if (route.agency_id) agencyIds.add(route.agency_id);
+      });
+
+      // Validate route foreign keys in trips.txt
+      let tripRowNum = 2;
+      tripsParsed.data.forEach(trip => {
+        if (trip.route_id && !routeIds.has(trip.route_id)) {
+          results.errors.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: route_id '${trip.route_id}' in trips.txt does not exist in routes.txt`,
+            file: 'trips.txt',
+            line: tripRowNum,
+            field: 'route_id',
+            suggestion: `Ensure route_id '${trip.route_id}' exists in routes.txt`
+          });
+          results.summary.errorCount++;
+          results.summary.isValid = false;
+          if (results.fileDetails['trips.txt']) {
+            results.fileDetails['trips.txt'].errors++;
+            results.fileDetails['trips.txt'].status = 'error';
+          }
+        }
+        tripRowNum++;
+      });
+
+      // Check for agency_id references if agency.txt exists
+      if (agencyFile) {
+        const agencyContent = await agencyFile.async('text');
+        const agencyParsed = window.Papa.parse(agencyContent, { header: true, skipEmptyLines: true });
+        const validAgencyIds = new Set();
+        
+        agencyParsed.data.forEach(agency => {
+          if (agency.agency_id) validAgencyIds.add(agency.agency_id);
+        });
+
+        // Validate agency_id in routes.txt
+        let routeRowNum = 2;
+        routesParsed.data.forEach(route => {
+          if (route.agency_id && !validAgencyIds.has(route.agency_id)) {
+            results.errors.push({
+              code: 'foreign_key_violation',
+              message: `Foreign key violation: agency_id '${route.agency_id}' in routes.txt does not exist in agency.txt`,
+              file: 'routes.txt',
+              line: routeRowNum,
+              field: 'agency_id',
+              suggestion: `Ensure agency_id '${route.agency_id}' exists in agency.txt`
+            });
+            results.summary.errorCount++;
+            results.summary.isValid = false;
+            if (results.fileDetails['routes.txt']) {
+              results.fileDetails['routes.txt'].errors++;
+              results.fileDetails['routes.txt'].status = 'error';
+            }
+          }
+          routeRowNum++;
+        });
+      }
+    }
+
+    // Validate service_id foreign keys
+    const validServiceIdsFromCalendar = new Set();
+    if (calendarFile) {
+      const calendarContent = await calendarFile.async('text');
+      const calendarParsed = window.Papa.parse(calendarContent, { header: true, skipEmptyLines: true });
+      calendarParsed.data.forEach(cal => {
+        if (cal.service_id) validServiceIdsFromCalendar.add(cal.service_id);
+      });
+    }
+
+    if (calendarDatesFile) {
+      const calendarDatesContent = await calendarDatesFile.async('text');
+      const calendarDatesParsed = window.Papa.parse(calendarDatesContent, { header: true, skipEmptyLines: true });
+      calendarDatesParsed.data.forEach(calDate => {
+        if (calDate.service_id) validServiceIdsFromCalendar.add(calDate.service_id);
+      });
+    }
+
+    // Check service_id references in trips.txt
+    if (validServiceIdsFromCalendar.size > 0) {
+      let tripRowNum = 2;
+      tripsParsed.data.forEach(trip => {
+        if (trip.service_id && !validServiceIdsFromCalendar.has(trip.service_id)) {
+          results.errors.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: service_id '${trip.service_id}' in trips.txt does not exist in calendar.txt or calendar_dates.txt`,
+            file: 'trips.txt',
+            line: tripRowNum,
+            field: 'service_id',
+            suggestion: `Ensure service_id '${trip.service_id}' exists in calendar.txt or calendar_dates.txt`
+          });
+          results.summary.errorCount++;
+          results.summary.isValid = false;
+          if (results.fileDetails['trips.txt']) {
+            results.fileDetails['trips.txt'].errors++;
+            results.fileDetails['trips.txt'].status = 'error';
+          }
+        }
+        tripRowNum++;
+      });
+    }
+
+    // CRITICAL: Validate stop_times.txt foreign keys (THIS WAS MISSING!)
+    let stopTimeRowNum = 2;
+    stopTimesParsed.data.forEach(stopTime => {
+      // Check trip_id - THIS IS THE KEY FIX!
+      if (stopTime.trip_id && !validTripIds.has(stopTime.trip_id)) {
+        results.errors.push({
+          code: 'foreign_key_violation',
+          message: `Foreign key violation: trip_id '${stopTime.trip_id}' in stop_times.txt does not exist in trips.txt`,
+          file: 'stop_times.txt',
+          line: stopTimeRowNum,
+          field: 'trip_id',
+          suggestion: `Ensure trip_id '${stopTime.trip_id}' exists in trips.txt or remove orphaned stop_times entries`
+        });
+        results.summary.errorCount++;
+        results.summary.isValid = false;
+        if (results.fileDetails['stop_times.txt']) {
+          results.fileDetails['stop_times.txt'].errors++;
+          results.fileDetails['stop_times.txt'].status = 'error';
+        }
+      }
+
+      // Check stop_id
+      if (stopTime.stop_id && !validStopIds.has(stopTime.stop_id)) {
+        results.errors.push({
+          code: 'foreign_key_violation',
+          message: `Foreign key violation: stop_id '${stopTime.stop_id}' in stop_times.txt does not exist in stops.txt`,
+          file: 'stop_times.txt',
+          line: stopTimeRowNum,
+          field: 'stop_id',
+          suggestion: `Ensure stop_id '${stopTime.stop_id}' exists in stops.txt`
+        });
+        results.summary.errorCount++;
+        results.summary.isValid = false;
+        if (results.fileDetails['stop_times.txt']) {
+          results.fileDetails['stop_times.txt'].errors++;
+          results.fileDetails['stop_times.txt'].status = 'error';
+        }
+      }
+
+      stopTimeRowNum++;
+    });
 
     // Build stop coordinates map
     const stopCoords = {};
@@ -1111,11 +1274,10 @@ async function performCrossFileValidations(zipContent, results) {
         const time2 = parseTime(stop2.arrival_time || stop2.departure_time);
 
         if (time1 && time2) {
-          const timeDiff = (time2 - time1) / 60; // in minutes
+          const timeDiff = (time2 - time1) / 60;
           if (timeDiff > 0 && distance > 0) {
-            const speed = (distance / timeDiff) * 60; // km/h
+            const speed = (distance / timeDiff) * 60;
 
-            // Fast travel between consecutive stops (> 150 km/h)
             if (speed > 150) {
               results.warnings.push({
                 code: 'fast_travel_between_consecutive_stops',
@@ -1127,7 +1289,6 @@ async function performCrossFileValidations(zipContent, results) {
               results.summary.warningCount++;
             }
 
-            // Fast travel between far stops (> 100 km/h for stops > 100km apart)
             if (distance > 100 && speed > 100) {
               results.warnings.push({
                 code: 'fast_travel_between_far_stops',
@@ -1181,7 +1342,6 @@ async function performCrossFileValidations(zipContent, results) {
       const shapesContent = await shapesFile.async('text');
       const shapesParsed = window.Papa.parse(shapesContent, { header: true, skipEmptyLines: true });
 
-      // Build shapes map
       const shapesMap = {};
       shapesParsed.data.forEach(shape => {
         if (!shape.shape_id) return;
@@ -1195,12 +1355,10 @@ async function performCrossFileValidations(zipContent, results) {
         });
       });
 
-      // Sort shapes by sequence
       Object.keys(shapesMap).forEach(shapeId => {
         shapesMap[shapeId].sort((a, b) => a.sequence - b.sequence);
       });
 
-      // Check each trip's stops against its shape
       tripsParsed.data.forEach(trip => {
         if (!trip.shape_id || !shapesMap[trip.shape_id]) return;
 
@@ -1209,19 +1367,16 @@ async function performCrossFileValidations(zipContent, results) {
 
         if (!stops || stops.length < 2) return;
 
-        // Check if stops are too far from shape
         stops.forEach((stop, idx) => {
           const stopCoord = stopCoords[stop.stop_id];
           if (!stopCoord) return;
 
-          // Find closest point on shape
           let minDist = Infinity;
           shape.forEach(shapePoint => {
             const dist = calculateDistance(stopCoord.lat, stopCoord.lon, shapePoint.lat, shapePoint.lon);
             if (dist < minDist) minDist = dist;
           });
 
-          // If stop is more than 1km from shape, warn
           if (minDist > 1) {
             results.warnings.push({
               code: 'stop_too_far_from_shape',
@@ -1234,7 +1389,6 @@ async function performCrossFileValidations(zipContent, results) {
           }
         });
 
-        // Check if stops match shape order
         const stopShapeIndices = stops.map(stop => {
           const stopCoord = stopCoords[stop.stop_id];
           if (!stopCoord) return -1;
@@ -1251,7 +1405,6 @@ async function performCrossFileValidations(zipContent, results) {
           return closestIdx;
         }).filter(idx => idx >= 0);
 
-        // Check if indices are in ascending order
         for (let i = 0; i < stopShapeIndices.length - 1; i++) {
           if (stopShapeIndices[i] > stopShapeIndices[i + 1]) {
             results.warnings.push({
@@ -1273,9 +1426,8 @@ async function performCrossFileValidations(zipContent, results) {
   }
 }
 
-// Calculate distance between two coordinates in kilometers (Haversine formula)
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth's radius in km
+  const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -1285,7 +1437,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-// Parse time string (HH:MM:SS) to seconds
 function parseTime(timeStr) {
   if (!timeStr) return null;
   const parts = timeStr.split(':');

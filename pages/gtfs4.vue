@@ -82,6 +82,36 @@
             </div>
           </div>
 
+          <!-- Feed Info & Agencies -->
+          <div v-if="validationResults.feedInfo || validationResults.agencies" class="mb-6 space-y-4">
+            <!-- Feed Info -->
+            <div v-if="validationResults.feedInfo" class="bg-white rounded-lg shadow-md p-6">
+              <h3 class="text-xl font-semibold text-gray-800 mb-4">📋 Feed Information</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div><span class="font-medium text-gray-700">Publisher:</span> {{ validationResults.feedInfo.publisher_name }}</div>
+                <div><span class="font-medium text-gray-700">Website:</span> <a :href="validationResults.feedInfo.publisher_url" target="_blank" class="text-blue-600 hover:underline">{{ validationResults.feedInfo.publisher_url }}</a></div>
+                <div><span class="font-medium text-gray-700">Language:</span> {{ validationResults.feedInfo.feed_lang }}</div>
+                <div><span class="font-medium text-gray-700">Version:</span> {{ validationResults.feedInfo.feed_version }}</div>
+                <div><span class="font-medium text-gray-700">Service Window:</span> {{ validationResults.feedInfo.feed_start_date }} to {{ validationResults.feedInfo.feed_end_date }}</div>
+              </div>
+            </div>
+
+            <!-- Agencies -->
+            <div v-if="validationResults.agencies && validationResults.agencies.length > 0" class="bg-white rounded-lg shadow-md p-6">
+              <h3 class="text-xl font-semibold text-gray-800 mb-4">🚌 Agencies Included ({{ validationResults.agencies.length }})</h3>
+              <div class="space-y-3">
+                <div v-for="(agency, idx) in validationResults.agencies" :key="idx" class="border-l-4 border-purple-500 pl-4 py-2">
+                  <p class="font-semibold text-gray-800">{{ agency.name }}</p>
+                  <div class="text-sm text-gray-600 mt-1 space-y-1">
+                    <p><span class="font-medium">Website:</span> <a :href="agency.url" target="_blank" class="text-blue-600 hover:underline">{{ agency.url }}</a></p>
+                    <p><span class="font-medium">Phone:</span> {{ agency.phone }}</p>
+                    <p v-if="agency.email !== 'Not provided'"><span class="font-medium">Email:</span> {{ agency.email }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Action Buttons -->
           <div class="flex gap-3 mb-6">
             <button @click="downloadReport('html')" 
@@ -613,6 +643,66 @@ async function processZip(buffer) {
             fileResult.warnings++;
             if (fileResult.status !== 'error') fileResult.status = 'warning';
           }
+
+          // Check route_short_name length
+          const routeShortName = row[headerMap['route_short_name']];
+          if (routeShortName && routeShortName.length > 12) {
+            results.warnings.push({
+              code: 'route_short_name_too_long',
+              message: `Route short name is too long (${routeShortName.length} characters): "${routeShortName}"`,
+              file: filename,
+              line: lineNumber,
+              field: 'route_short_name'
+            });
+            results.summary.warningCount++;
+            fileResult.warnings++;
+            if (fileResult.status !== 'error') fileResult.status = 'warning';
+          }
+
+          // Check for mixed case in recommended fields
+          const routeLongName = row[headerMap['route_long_name']];
+          if (routeLongName && hasMixedCase(routeLongName)) {
+            results.warnings.push({
+              code: 'mixed_case_recommended_field',
+              message: `Route long name has mixed case: "${routeLongName}"`,
+              file: filename,
+              line: lineNumber,
+              field: 'route_long_name'
+            });
+            results.summary.warningCount++;
+            fileResult.warnings++;
+            if (fileResult.status !== 'error') fileResult.status = 'warning';
+          }
+
+          if (routeShortName && hasMixedCase(routeShortName)) {
+            results.warnings.push({
+              code: 'mixed_case_recommended_field',
+              message: `Route short name has mixed case: "${routeShortName}"`,
+              file: filename,
+              line: lineNumber,
+              field: 'route_short_name'
+            });
+            results.summary.warningCount++;
+            fileResult.warnings++;
+            if (fileResult.status !== 'error') fileResult.status = 'warning';
+          }
+        }
+
+        // Check for mixed case in stop names
+        if (filename === 'stops.txt') {
+          const stopName = row[headerMap['stop_name']];
+          if (stopName && hasMixedCase(stopName)) {
+            results.warnings.push({
+              code: 'mixed_case_recommended_field',
+              message: `Stop name has mixed case: "${stopName}"`,
+              file: filename,
+              line: lineNumber,
+              field: 'stop_name'
+            });
+            results.summary.warningCount++;
+            fileResult.warnings++;
+            if (fileResult.status !== 'error') fileResult.status = 'warning';
+          }
         }
       });
 
@@ -629,6 +719,44 @@ async function processZip(buffer) {
       } else if (filename === 'agency.txt') {
         results.statistics.total_agencies = parsed.data.length;
       }
+    }
+
+    // Post-processing validations (cross-file validations)
+    progress.value = 80;
+    processingStatus.value = 'Performing cross-file validations...';
+    await performCrossFileValidations(zipContent, results);
+
+    progress.value = 90;
+    processingStatus.value = 'Generating feed information...';
+
+    // Add feed information to results if available
+    if (zipContent.files['feed_info.txt']) {
+      const feedInfoContent = await zipContent.files['feed_info.txt'].async('text');
+      const feedInfoParsed = window.Papa.parse(feedInfoContent, { header: true, skipEmptyLines: true });
+      if (feedInfoParsed.data.length > 0) {
+        const feedInfo = feedInfoParsed.data[0];
+        results.feedInfo = {
+          publisher_name: feedInfo.feed_publisher_name || 'Not provided',
+          publisher_url: feedInfo.feed_publisher_url || 'Not provided',
+          feed_lang: feedInfo.feed_lang || 'Not provided',
+          feed_start_date: feedInfo.feed_start_date || 'Not provided',
+          feed_end_date: feedInfo.feed_end_date || 'Not provided',
+          feed_version: feedInfo.feed_version || 'Not provided'
+        };
+      }
+    }
+
+    // Add agencies to results
+    if (zipContent.files['agency.txt']) {
+      const agencyContent = await zipContent.files['agency.txt'].async('text');
+      const agencyParsed = window.Papa.parse(agencyContent, { header: true, skipEmptyLines: true });
+      results.agencies = agencyParsed.data.map(agency => ({
+        name: agency.agency_name || 'Unknown',
+        url: agency.agency_url || 'Not provided',
+        phone: agency.agency_phone || 'Not provided',
+        email: agency.agency_email || 'Not provided',
+        timezone: agency.agency_timezone || 'Not provided'
+      }));
     }
 
     const totalIssues = results.summary.errorCount + (results.summary.warningCount * 0.5);
@@ -906,6 +1034,267 @@ function isValidEmail(email) {
 
 function isValidTimeFormat(time) {
   return /^\d{1,2}:\d{2}:\d{2}$/.test(time);
+}
+
+function hasMixedCase(str) {
+  // Check if string has both uppercase and lowercase letters (not all upper or all lower)
+  const hasUpper = /[A-Z]/.test(str);
+  const hasLower = /[a-z]/.test(str);
+  return hasUpper && hasLower && str !== str.toLowerCase() && str !== str.toUpperCase();
+}
+
+async function performCrossFileValidations(zipContent, results) {
+  try {
+    // Load all necessary files
+    const stopsFile = zipContent.files['stops.txt'];
+    const stopTimesFile = zipContent.files['stop_times.txt'];
+    const tripsFile = zipContent.files['trips.txt'];
+    const shapesFile = zipContent.files['shapes.txt'];
+    const routesFile = zipContent.files['routes.txt'];
+
+    if (!stopsFile || !stopTimesFile || !tripsFile) return;
+
+    // Parse files
+    const stopsContent = await stopsFile.async('text');
+    const stopsParsed = window.Papa.parse(stopsContent, { header: true, skipEmptyLines: true });
+    
+    const stopTimesContent = await stopTimesFile.async('text');
+    const stopTimesParsed = window.Papa.parse(stopTimesContent, { header: true, skipEmptyLines: true });
+    
+    const tripsContent = await tripsFile.async('text');
+    const tripsParsed = window.Papa.parse(tripsContent, { header: true, skipEmptyLines: true });
+
+    // Build stop coordinates map
+    const stopCoords = {};
+    stopsParsed.data.forEach(stop => {
+      if (stop.stop_id && stop.stop_lat && stop.stop_lon) {
+        stopCoords[stop.stop_id] = {
+          lat: parseFloat(stop.stop_lat),
+          lon: parseFloat(stop.stop_lon)
+        };
+      }
+    });
+
+    // Group stop_times by trip_id
+    const tripStopTimes = {};
+    stopTimesParsed.data.forEach(st => {
+      if (!st.trip_id) return;
+      if (!tripStopTimes[st.trip_id]) {
+        tripStopTimes[st.trip_id] = [];
+      }
+      tripStopTimes[st.trip_id].push({
+        stop_id: st.stop_id,
+        stop_sequence: parseInt(st.stop_sequence),
+        arrival_time: st.arrival_time,
+        departure_time: st.departure_time
+      });
+    });
+
+    // Sort stop times by sequence
+    Object.keys(tripStopTimes).forEach(tripId => {
+      tripStopTimes[tripId].sort((a, b) => a.stop_sequence - b.stop_sequence);
+    });
+
+    // Check for fast travel between consecutive stops
+    Object.entries(tripStopTimes).forEach(([tripId, stopTimes]) => {
+      for (let i = 0; i < stopTimes.length - 1; i++) {
+        const stop1 = stopTimes[i];
+        const stop2 = stopTimes[i + 1];
+
+        const coords1 = stopCoords[stop1.stop_id];
+        const coords2 = stopCoords[stop2.stop_id];
+
+        if (!coords1 || !coords2) continue;
+
+        const distance = calculateDistance(coords1.lat, coords1.lon, coords2.lat, coords2.lon);
+        const time1 = parseTime(stop1.departure_time || stop1.arrival_time);
+        const time2 = parseTime(stop2.arrival_time || stop2.departure_time);
+
+        if (time1 && time2) {
+          const timeDiff = (time2 - time1) / 60; // in minutes
+          if (timeDiff > 0 && distance > 0) {
+            const speed = (distance / timeDiff) * 60; // km/h
+
+            // Fast travel between consecutive stops (> 150 km/h)
+            if (speed > 150) {
+              results.warnings.push({
+                code: 'fast_travel_between_consecutive_stops',
+                message: `Unrealistic travel speed of ${Math.round(speed)} km/h between consecutive stops`,
+                file: 'stop_times.txt',
+                field: 'trip_id',
+                suggestion: `Check times for trip ${tripId} between stops ${stop1.stop_id} and ${stop2.stop_id}`
+              });
+              results.summary.warningCount++;
+            }
+
+            // Fast travel between far stops (> 100 km/h for stops > 100km apart)
+            if (distance > 100 && speed > 100) {
+              results.warnings.push({
+                code: 'fast_travel_between_far_stops',
+                message: `High travel speed of ${Math.round(speed)} km/h over ${Math.round(distance)} km`,
+                file: 'stop_times.txt',
+                field: 'trip_id',
+                suggestion: `Check times for trip ${tripId}`
+              });
+              results.summary.warningCount++;
+            }
+          }
+        }
+      }
+    });
+
+    // Check for unused trips
+    const tripsWithStopTimes = new Set(Object.keys(tripStopTimes));
+    const allTrips = new Set();
+    tripsParsed.data.forEach(trip => {
+      if (trip.trip_id) allTrips.add(trip.trip_id);
+    });
+
+    allTrips.forEach(tripId => {
+      if (!tripsWithStopTimes.has(tripId)) {
+        results.warnings.push({
+          code: 'unused_trip',
+          message: `Trip ${tripId} has no stop times defined`,
+          file: 'trips.txt',
+          field: 'trip_id'
+        });
+        results.summary.warningCount++;
+      }
+    });
+
+    // Check for unusable trips (less than 2 stops)
+    Object.entries(tripStopTimes).forEach(([tripId, stopTimes]) => {
+      if (stopTimes.length < 2) {
+        results.warnings.push({
+          code: 'unusable_trip',
+          message: `Trip ${tripId} has less than 2 stops`,
+          file: 'stop_times.txt',
+          field: 'trip_id',
+          suggestion: 'Trips must have at least 2 stops'
+        });
+        results.summary.warningCount++;
+      }
+    });
+
+    // Check stops match shape order (if shapes exist)
+    if (shapesFile) {
+      const shapesContent = await shapesFile.async('text');
+      const shapesParsed = window.Papa.parse(shapesContent, { header: true, skipEmptyLines: true });
+
+      // Build shapes map
+      const shapesMap = {};
+      shapesParsed.data.forEach(shape => {
+        if (!shape.shape_id) return;
+        if (!shapesMap[shape.shape_id]) {
+          shapesMap[shape.shape_id] = [];
+        }
+        shapesMap[shape.shape_id].push({
+          lat: parseFloat(shape.shape_pt_lat),
+          lon: parseFloat(shape.shape_pt_lon),
+          sequence: parseInt(shape.shape_pt_sequence)
+        });
+      });
+
+      // Sort shapes by sequence
+      Object.keys(shapesMap).forEach(shapeId => {
+        shapesMap[shapeId].sort((a, b) => a.sequence - b.sequence);
+      });
+
+      // Check each trip's stops against its shape
+      tripsParsed.data.forEach(trip => {
+        if (!trip.shape_id || !shapesMap[trip.shape_id]) return;
+
+        const shape = shapesMap[trip.shape_id];
+        const stops = tripStopTimes[trip.trip_id];
+
+        if (!stops || stops.length < 2) return;
+
+        // Check if stops are too far from shape
+        stops.forEach((stop, idx) => {
+          const stopCoord = stopCoords[stop.stop_id];
+          if (!stopCoord) return;
+
+          // Find closest point on shape
+          let minDist = Infinity;
+          shape.forEach(shapePoint => {
+            const dist = calculateDistance(stopCoord.lat, stopCoord.lon, shapePoint.lat, shapePoint.lon);
+            if (dist < minDist) minDist = dist;
+          });
+
+          // If stop is more than 1km from shape, warn
+          if (minDist > 1) {
+            results.warnings.push({
+              code: 'stop_too_far_from_shape',
+              message: `Stop ${stop.stop_id} is ${Math.round(minDist * 1000)}m from shape`,
+              file: 'stop_times.txt',
+              field: 'stop_id',
+              suggestion: `Check shape_id for trip ${trip.trip_id}`
+            });
+            results.summary.warningCount++;
+          }
+        });
+
+        // Check if stops match shape order
+        const stopShapeIndices = stops.map(stop => {
+          const stopCoord = stopCoords[stop.stop_id];
+          if (!stopCoord) return -1;
+
+          let closestIdx = 0;
+          let minDist = Infinity;
+          shape.forEach((shapePoint, idx) => {
+            const dist = calculateDistance(stopCoord.lat, stopCoord.lon, shapePoint.lat, shapePoint.lon);
+            if (dist < minDist) {
+              minDist = dist;
+              closestIdx = idx;
+            }
+          });
+          return closestIdx;
+        }).filter(idx => idx >= 0);
+
+        // Check if indices are in ascending order
+        for (let i = 0; i < stopShapeIndices.length - 1; i++) {
+          if (stopShapeIndices[i] > stopShapeIndices[i + 1]) {
+            results.warnings.push({
+              code: 'stops_match_shape_out_of_order',
+              message: `Stops for trip ${trip.trip_id} don't match shape order`,
+              file: 'trips.txt',
+              field: 'trip_id',
+              suggestion: 'Check stop sequence or shape definition'
+            });
+            results.summary.warningCount++;
+            break;
+          }
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error('Error in cross-file validation:', error);
+  }
+}
+
+// Calculate distance between two coordinates in kilometers (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Parse time string (HH:MM:SS) to seconds
+function parseTime(timeStr) {
+  if (!timeStr) return null;
+  const parts = timeStr.split(':');
+  if (parts.length !== 3) return null;
+  const hours = parseInt(parts[0]);
+  const minutes = parseInt(parts[1]);
+  const seconds = parseInt(parts[2]);
+  if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) return null;
+  return hours * 3600 + minutes * 60 + seconds;
 }
 
 function createErrorResult(message) {

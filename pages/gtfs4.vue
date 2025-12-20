@@ -1,6 +1,7 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 py-8 px-4">
     <div class="container mx-auto max-w-6xl">
+      <!-- Header and Upload Section -->
       <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h1 class="text-3xl font-bold text-gray-800 mb-2">
           ⏱️ GTFS Stop Times Generator
@@ -40,6 +41,7 @@
           <p>Processing your GTFS file...</p>
         </div>
 
+        <!-- Uploaded File Information -->
         <div v-if="gtfsFileName" class="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
           <div class="flex items-center justify-between">
             <div class="flex items-center">
@@ -107,6 +109,12 @@ function handleGTFSFile(event) {
     } else {
       report.value = `Validation Report:\nMissing files:\n${missingFiles.join('\n')}`;
     }
+  };
+
+  // Error handling for worker
+  worker.onerror = function (error) {
+    isProcessing.value = false;
+    report.value = `Worker error: ${error.message}`;
   };
 }
 

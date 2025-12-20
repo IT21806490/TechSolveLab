@@ -60,7 +60,9 @@ function handleFileUpload(event) {
   fileStatus.value = {};
 
   // Create a web worker to handle ZIP processing
-  const worker = new Worker(URL.createObjectURL(new Blob([`
+  const workerBlob = new Blob([`
+    importScripts('https://cdn.jsdelivr.net/npm/jszip@3.7.1/dist/jszip.min.js');
+
     onmessage = function (event) {
       const file = event.data;
       const reader = new FileReader();
@@ -84,6 +86,8 @@ function handleFileUpload(event) {
             });
 
             postMessage({ status: 'success', files: filesStatus });
+          }).catch((err) => {
+            postMessage({ status: 'error', message: 'Error parsing the ZIP file. It may be corrupted or invalid.' });
           });
         } catch (error) {
           postMessage({ status: 'error', message: 'Unable to extract or parse the ZIP file.' });
@@ -92,7 +96,9 @@ function handleFileUpload(event) {
 
       reader.readAsArrayBuffer(file);
     };
-  `], { type: 'application/javascript' })));
+  `], { type: 'application/javascript' });
+
+  const worker = new Worker(URL.createObjectURL(workerBlob));
 
   // When the worker sends a message back
   worker.onmessage = function (e) {

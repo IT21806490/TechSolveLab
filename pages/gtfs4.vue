@@ -1,7 +1,6 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 py-8 px-4">
     <div class="container mx-auto max-w-6xl">
-      <!-- Header -->
       <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h1 class="text-3xl font-bold text-gray-800 mb-2">
           ⏱️ GTFS Stop Times Generator
@@ -11,7 +10,7 @@
         </p>
       </div>
 
-      <!-- Upload GTFS Files -->
+      <!-- Upload GTFS File -->
       <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           1. Upload GTFS ZIP File
@@ -33,7 +32,7 @@
           </label>
         </div>
 
-        <!-- Display Feedback During File Processing -->
+        <!-- Feedback During File Processing -->
         <div v-if="isProcessing" class="text-center mt-4 text-gray-500">
           <svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4h16M4 12h16M4 20h16"></path>
@@ -53,7 +52,7 @@
         </div>
       </div>
 
-      <!-- Report and Download -->
+      <!-- Validation Report -->
       <div v-if="report" class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           2. Validation Report
@@ -74,8 +73,9 @@ import { ref } from 'vue';
 const gtfsFileName = ref('');
 const report = ref('');
 const isProcessing = ref(false);
+const worker = new Worker(new URL('./gtfsWorker.js', import.meta.url));
 
-// Handle GTFS file upload and validation
+// Handle GTFS file upload and validation using Web Worker
 function handleGTFSFile(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -83,39 +83,31 @@ function handleGTFSFile(event) {
   gtfsFileName.value = file.name;
   isProcessing.value = true;  // Show loading indicator
 
-  // Create a reader to read the ZIP file as a binary
+  // Read the file as a binary buffer
   const reader = new FileReader();
   reader.onload = function (e) {
-    const arrayBuffer = e.target.result;
+    const zipBuffer = e.target.result;
 
-    // Open the ZIP file using zip.js
-    const zipReader = new zip.ZipReader(new zip.BlobReader(new Blob([arrayBuffer])));
-
-    zipReader.getEntries().then(entries => {
-      const fileNames = entries.map(entry => entry.filename);
-      const requiredFiles = ['stops.txt', 'routes.txt', 'trips.txt', 'stop_times.txt'];
-
-      // Check if all required files are present
-      const missingFiles = requiredFiles.filter(file => !fileNames.includes(file));
-
-      if (missingFiles.length === 0) {
-        report.value = "GTFS ZIP file is valid!";
-      } else {
-        report.value = `Validation Report:\nMissing files:\n${missingFiles.join('\n')}`;
-      }
-
-      // Close the zip reader after processing
-      zipReader.close();
-
-      // Hide processing spinner
-      isProcessing.value = false;
-    }).catch((error) => {
-      report.value = `Error: Unable to extract or parse the ZIP file. ${error}`;
-      isProcessing.value = false;
-    });
+    // Send the buffer to the Web Worker for background processing
+    worker.postMessage({ zipBuffer });
   };
 
   reader.readAsArrayBuffer(file);
+
+  // Listen for messages from the worker
+  worker.onmessage = function (e) {
+    const { missingFiles, isValid, error } = e.data;
+
+    isProcessing.value = false;  // Hide loading indicator
+
+    if (error) {
+      report.value = `Error: ${error}`;
+    } else if (isValid) {
+      report.value = 'GTFS ZIP file is valid!';
+    } else {
+      report.value = `Validation Report:\nMissing files:\n${missingFiles.join('\n')}`;
+    }
+  };
 }
 
 // Download the validation report as a text file

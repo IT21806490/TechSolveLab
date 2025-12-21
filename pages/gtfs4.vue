@@ -284,6 +284,16 @@
       <!-- Info Section -->
       <div class="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg shadow-lg p-6 text-white">
         <h3 class="text-xl font-bold mb-3">⚡ Super Fast GTFS Validator</h3>
+        <div class="mb-4 p-4 bg-white/10 rounded-lg">
+          <h4 class="font-semibold mb-2">📊 Scoring System:</h4>
+          <ul class="space-y-1 text-sm">
+            <li>✅ <strong>0 Errors = 100/100</strong> (Perfect! Warnings don't affect score)</li>
+            <li>⚠️ <strong>Warnings are informational only</strong> (Best practices, but feed will work)</li>
+            <li>❌ <strong>Errors deduct 5 points each</strong> (Must be fixed for upload)</li>
+            <li>🎯 <strong>Example:</strong> 0 errors + 800 warnings = 100/100 ✓</li>
+            <li>🎯 <strong>Example:</strong> 5 errors + 0 warnings = 75/100</li>
+          </ul>
+        </div>
         <div class="grid md:grid-cols-2 gap-6">
           <div>
             <h4 class="font-semibold mb-2">✅ ERRORS (Cannot Upload Without Fixing):</h4>
@@ -300,13 +310,15 @@
             </ul>
           </div>
           <div>
-            <h4 class="font-semibold mb-2">⚠️ WARNINGS (Best Practices):</h4>
+            <h4 class="font-semibold mb-2">⚠️ WARNINGS (Best Practices - Feed Will Still Work):</h4>
             <ul class="space-y-1 text-sm">
               <li>• BOM in files (UTF-8 BOM)</li>
               <li>• Spaces in headers</li>
               <li>• Trailing/leading spaces in ID fields</li>
+              <li>• Mixed case recommendations</li>
+              <li>• Route name length suggestions</li>
               <li>• Data quality recommendations</li>
-              <li>• Optional improvements</li>
+              <li><strong>→ Warnings don't affect your score!</strong></li>
             </ul>
           </div>
         </div>
@@ -1047,31 +1059,27 @@ async function processZip(buffer) {
       }));
     }
 
-    // Better scoring: Errors are critical (-5 pts each), Warnings are minor (-0.5 pts each)
-    // Perfect score = 100, valid feed with warnings should still score 70+
+    // NEW SCORING: Only errors affect score, warnings are informational only
+    // - 0 errors = 100/100 (perfect, regardless of warnings)
+    // - Errors deduct points: each error = -5 points
     console.log('=== SCORE CALCULATION DEBUG ===');
     console.log('Error Count:', results.summary.errorCount);
     console.log('Warning Count:', results.summary.warningCount);
     
-    const errorPenalty = results.summary.errorCount * 5;
-    const warningPenalty = results.summary.warningCount * 0.5;
-    const calculatedScore = 100 - errorPenalty - warningPenalty;
+    if (results.summary.errorCount === 0) {
+      // No errors = perfect score, warnings don't matter
+      results.summary.score = 100;
+      console.log('No errors detected - Perfect score: 100');
+    } else {
+      // Calculate score based only on errors
+      const errorPenalty = results.summary.errorCount * 5;
+      results.summary.score = Math.max(0, Math.min(100, 100 - errorPenalty));
+      console.log('Error Penalty:', errorPenalty);
+      console.log('Final Score:', results.summary.score);
+    }
     
-    console.log('Error Penalty:', errorPenalty);
-    console.log('Warning Penalty:', warningPenalty);
-    console.log('Calculated Score (before clamp):', calculatedScore);
-    
-    results.summary.score = Math.max(0, Math.min(100, Math.round(calculatedScore)));
-    
-    console.log('Final Score:', results.summary.score);
     console.log('Is Valid:', results.summary.isValid);
     console.log('================================');
-    
-    // Ensure score is never undefined or null
-    if (results.summary.score === undefined || results.summary.score === null || isNaN(results.summary.score)) {
-      console.warn('Score was invalid, setting default');
-      results.summary.score = results.summary.isValid ? 100 : 0;
-    }
 
     progress.value = 100;
     processingStatus.value = 'Complete!';

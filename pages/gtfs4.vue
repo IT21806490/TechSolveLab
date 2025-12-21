@@ -472,6 +472,21 @@ async function processZip(buffer) {
         parsed: window.Papa.parse(await fileData.async('text'), { header: true, skipEmptyLines: true })
       };
 
+      // Check for parsing errors - SYNTAX ERROR
+      if (parsed.errors && parsed.errors.length > 0) {
+        parsed.errors.forEach(error => {
+          results.errors.push({
+            code: 'csv_parsing_error',
+            message: `CSV parsing error: ${error.message}`,
+            file: filename,
+            line: error.row ? error.row + 2 : undefined,
+            suggestion: 'Fix CSV formatting issues (check for unclosed quotes, wrong delimiters, or malformed rows)'
+          });
+          results.summary.errorCount++;
+          results.summary.isValid = false;
+        });
+      }
+
       const fileResult = {
         status: 'valid',
         required: spec.required,
@@ -482,6 +497,92 @@ async function processZip(buffer) {
       };
 
       const headers = parsed.meta.fields || [];
+      
+      // Check for empty file - ERROR
+      if (content.trim().length === 0) {
+        results.errors.push({
+          code: 'empty_file',
+          message: `File '${filename}' is empty`,
+          file: filename,
+          suggestion: 'Add data to this file or remove it if not needed'
+        });
+        results.summary.errorCount++;
+        results.summary.isValid = false;
+        fileResult.errors++;
+        fileResult.status = 'error';
+        results.fileDetails[filename] = fileResult;
+        continue;
+      }
+
+      // Check for missing headers - ERROR
+      if (!headers || headers.length === 0) {
+        results.errors.push({
+          code: 'missing_header',
+          message: `File '${filename}' has no header row`,
+          file: filename,
+          suggestion: 'Add a header row with column names'
+        });
+        results.summary.errorCount++;
+        results.summary.isValid = false;
+        fileResult.errors++;
+        fileResult.status = 'error';
+        results.fileDetails[filename] = fileResult;
+        continue;
+      }
+
+      // Check for BOM (Byte Order Mark) - WARNING
+      if (content.charCodeAt(0) === 0xFEFF || content.startsWith('\ufeff')) {
+        results.warnings.push({
+          code: 'bom_in_file',
+          message: `File '${filename}' contains BOM (Byte Order Mark)`,
+          file: filename,
+          suggestion: 'Remove BOM from file - save as UTF-8 without BOM'
+        });
+        results.summary.warningCount++;
+      }
+
+      // Check for duplicate column names - ERROR
+      const headerLower = headers.map(h => h.toLowerCase());
+      const duplicateHeaders = headerLower.filter((h, i) => headerLower.indexOf(h) !== i);
+      if (duplicateHeaders.length > 0) {
+        results.errors.push({
+          code: 'duplicate_column_name',
+          message: `Duplicate column names in ${filename}: ${[...new Set(duplicateHeaders)].join(', ')}`,
+          file: filename,
+          suggestion: 'Each column name must be unique'
+        });
+        results.summary.errorCount++;
+        results.summary.isValid = false;
+        fileResult.errors++;
+        fileResult.status = 'error';
+      }
+
+      // Check for empty column names - ERROR
+      if (headers.some(h => !h || h.trim() === '')) {
+        results.errors.push({
+          code: 'empty_column_name',
+          message: `File '${filename}' contains empty column names`,
+          file: filename,
+          suggestion: 'All columns must have names'
+        });
+        results.summary.errorCount++;
+        results.summary.isValid = false;
+        fileResult.errors++;
+        fileResult.status = 'error';
+      }
+
+      // Check for trailing/leading spaces in headers - WARNING
+      headers.forEach(h => {
+        if (h !== h.trim()) {
+          results.warnings.push({
+            code: 'space_in_header',
+            message: `Column name '${h}' has leading or trailing spaces in ${filename}`,
+            file: filename,
+            suggestion: 'Remove spaces from column names'
+          });
+          results.summary.warningCount++;
+        }
+      });
       
       // Check required fields - ERROR if missing
       for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {

@@ -710,14 +710,14 @@ async function processZip(buffer) {
           }
         }
 
-        // Validate specific field formats
-        // Time format validation
+        // Validate specific field formats - These should be WARNINGS, not ERRORS
+        // Time format validation - WARNING
         if (filename === 'stop_times.txt') {
           const arrivalTime = row[headerMap['arrival_time']];
           const departureTime = row[headerMap['departure_time']];
           
           if (arrivalTime && !/^\d{1,2}:\d{2}:\d{2}$/.test(arrivalTime)) {
-            errorBatch.push({
+            results.warnings.push({
               code: 'invalid_time',
               message: `Invalid time format: '${arrivalTime}' (must be HH:MM:SS)`,
               file: filename,
@@ -725,10 +725,11 @@ async function processZip(buffer) {
               field: 'arrival_time',
               suggestion: 'Use HH:MM:SS format (e.g., 08:30:00 or 25:30:00 for times after midnight)'
             });
+            results.summary.warningCount++;
           }
           
           if (departureTime && !/^\d{1,2}:\d{2}:\d{2}$/.test(departureTime)) {
-            errorBatch.push({
+            results.warnings.push({
               code: 'invalid_time',
               message: `Invalid time format: '${departureTime}' (must be HH:MM:SS)`,
               file: filename,
@@ -736,16 +737,17 @@ async function processZip(buffer) {
               field: 'departure_time',
               suggestion: 'Use HH:MM:SS format'
             });
+            results.summary.warningCount++;
           }
         }
 
-        // Date format validation (YYYYMMDD)
+        // Date format validation (YYYYMMDD) - WARNING
         if (filename === 'calendar.txt') {
           const startDate = row[headerMap['start_date']];
           const endDate = row[headerMap['end_date']];
           
           if (startDate && !/^\d{8}$/.test(startDate)) {
-            errorBatch.push({
+            results.warnings.push({
               code: 'invalid_date',
               message: `Invalid date format: '${startDate}' (must be YYYYMMDD)`,
               file: filename,
@@ -753,10 +755,11 @@ async function processZip(buffer) {
               field: 'start_date',
               suggestion: 'Use YYYYMMDD format (e.g., 20250101)'
             });
+            results.summary.warningCount++;
           }
           
           if (endDate && !/^\d{8}$/.test(endDate)) {
-            errorBatch.push({
+            results.warnings.push({
               code: 'invalid_date',
               message: `Invalid date format: '${endDate}' (must be YYYYMMDD)`,
               file: filename,
@@ -764,10 +767,11 @@ async function processZip(buffer) {
               field: 'end_date',
               suggestion: 'Use YYYYMMDD format'
             });
+            results.summary.warningCount++;
           }
         }
 
-        // URL validation
+        // URL validation - WARNING
         if (filename === 'agency.txt' || filename === 'routes.txt' || filename === 'stops.txt') {
           const urlFields = ['agency_url', 'route_url', 'stop_url', 'agency_fare_url'];
           for (const urlField of urlFields) {
@@ -776,7 +780,7 @@ async function processZip(buffer) {
               try {
                 new URL(url);
                 if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                  errorBatch.push({
+                  results.warnings.push({
                     code: 'invalid_url',
                     message: `Invalid URL: '${url}' (must start with http:// or https://)`,
                     file: filename,
@@ -784,9 +788,10 @@ async function processZip(buffer) {
                     field: urlField,
                     suggestion: 'URLs must include the protocol (http:// or https://)'
                   });
+                  results.summary.warningCount++;
                 }
               } catch {
-                errorBatch.push({
+                results.warnings.push({
                   code: 'invalid_url',
                   message: `Malformed URL: '${url}'`,
                   file: filename,
@@ -794,16 +799,17 @@ async function processZip(buffer) {
                   field: urlField,
                   suggestion: 'Provide a valid URL'
                 });
+                results.summary.warningCount++;
               }
             }
           }
         }
 
-        // Email validation
+        // Email validation - WARNING
         if (filename === 'agency.txt' && row[headerMap['agency_email']]) {
           const email = row[headerMap['agency_email']];
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            errorBatch.push({
+            results.warnings.push({
               code: 'invalid_email',
               message: `Invalid email format: '${email}'`,
               file: filename,
@@ -811,14 +817,15 @@ async function processZip(buffer) {
               field: 'agency_email',
               suggestion: 'Provide a valid email address'
             });
+            results.summary.warningCount++;
           }
         }
 
-        // Integer validation
+        // Integer validation - WARNING
         if (filename === 'stop_times.txt' && row[headerMap['stop_sequence']]) {
           const stopSeq = row[headerMap['stop_sequence']];
           if (!/^\d+$/.test(stopSeq) || parseInt(stopSeq) < 0) {
-            errorBatch.push({
+            results.warnings.push({
               code: 'invalid_integer',
               message: `Invalid integer value for stop_sequence: '${stopSeq}'`,
               file: filename,
@@ -826,16 +833,17 @@ async function processZip(buffer) {
               field: 'stop_sequence',
               suggestion: 'stop_sequence must be a non-negative integer'
             });
+            results.summary.warningCount++;
           }
         }
 
-        // Float validation for coordinates
+        // Float validation for coordinates - WARNING
         if (filename === 'stops.txt') {
           const lat = row[headerMap['stop_lat']];
           const lon = row[headerMap['stop_lon']];
           
           if (lat && !/^-?\d+\.?\d*$/.test(lat)) {
-            errorBatch.push({
+            results.warnings.push({
               code: 'invalid_float',
               message: `Invalid number format for latitude: '${lat}'`,
               file: filename,
@@ -843,10 +851,11 @@ async function processZip(buffer) {
               field: 'stop_lat',
               suggestion: 'Latitude must be a valid decimal number'
             });
+            results.summary.warningCount++;
           }
           
           if (lon && !/^-?\d+\.?\d*$/.test(lon)) {
-            errorBatch.push({
+            results.warnings.push({
               code: 'invalid_float',
               message: `Invalid number format for longitude: '${lon}'`,
               file: filename,
@@ -854,6 +863,63 @@ async function processZip(buffer) {
               field: 'stop_lon',
               suggestion: 'Longitude must be a valid decimal number'
             });
+            results.summary.warningCount++;
+          }
+        }
+
+        // Check for mixed case in route names - WARNING
+        if (filename === 'routes.txt') {
+          const routeShortName = row[headerMap['route_short_name']];
+          const routeLongName = row[headerMap['route_long_name']];
+          
+          if (routeShortName && /^[A-Z0-9\s\/\-]+$/.test(routeShortName) && routeShortName.length > 3) {
+            results.warnings.push({
+              code: 'mixed_case_recommended_field',
+              message: `Route short name should use mixed case: "${routeShortName}"`,
+              file: filename,
+              line: lineNumber,
+              field: 'route_short_name'
+            });
+            results.summary.warningCount++;
+          }
+          
+          if (routeLongName && /^[A-Z0-9\s\/\-]+$/.test(routeLongName) && routeLongName.length > 3) {
+            results.warnings.push({
+              code: 'mixed_case_recommended_field',
+              message: `Route long name should use mixed case: "${routeLongName}"`,
+              file: filename,
+              line: lineNumber,
+              field: 'route_long_name'
+            });
+            results.summary.warningCount++;
+          }
+
+          // Check route_short_name length - WARNING
+          if (routeShortName && routeShortName.length > 12) {
+            results.warnings.push({
+              code: 'route_short_name_too_long',
+              message: `Route short name is too long (${routeShortName.length} characters): "${routeShortName}"`,
+              file: filename,
+              line: lineNumber,
+              field: 'route_short_name',
+              suggestion: 'Route short name should be 12 characters or less'
+            });
+            results.summary.warningCount++;
+          }
+        }
+
+        // Check for mixed case in stop names - WARNING
+        if (filename === 'stops.txt') {
+          const stopName = row[headerMap['stop_name']];
+          if (stopName && /^[A-Z0-9\s\/\-]+$/.test(stopName) && stopName.length > 3) {
+            results.warnings.push({
+              code: 'mixed_case_recommended_field',
+              message: `Stop name should use mixed case: "${stopName}"`,
+              file: filename,
+              line: lineNumber,
+              field: 'stop_name'
+            });
+            results.summary.warningCount++;
           }
         }
 

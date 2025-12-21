@@ -304,6 +304,7 @@
             <ul class="space-y-1 text-sm">
               <li>• BOM in files (UTF-8 BOM)</li>
               <li>• Spaces in headers</li>
+              <li>• Trailing/leading spaces in ID fields</li>
               <li>• Data quality recommendations</li>
               <li>• Optional improvements</li>
             </ul>
@@ -318,6 +319,7 @@
             <li>✓ Smart batching - Processes 1000s of rows efficiently</li>
             <li>✓ Results in 5-15 seconds vs 2-5 minutes on other validators</li>
             <li>✓ 100% private - No data leaves your browser</li>
+            <li>✓ Auto-trims whitespace like Google Transit does</li>
           </ul>
         </div>
       </div>
@@ -554,6 +556,7 @@ async function processZip(buffer) {
           suggestion: 'Remove BOM from file - save as UTF-8 without BOM'
         });
         results.summary.warningCount++;
+        fileResult.warnings++;
       }
 
       // Check for duplicate column names - ERROR
@@ -596,6 +599,7 @@ async function processZip(buffer) {
             suggestion: 'Remove spaces from column names'
           });
           results.summary.warningCount++;
+          fileResult.warnings++;
         }
       });
       
@@ -629,6 +633,7 @@ async function processZip(buffer) {
       
       // Batch error tracking to avoid excessive array operations
       const errorBatch = [];
+      const warningBatch = [];
       let duplicateCount = 0;
       let invalidCoordCount = 0;
 
@@ -717,7 +722,7 @@ async function processZip(buffer) {
           const departureTime = row[headerMap['departure_time']];
           
           if (arrivalTime && !/^\d{1,2}:\d{2}:\d{2}$/.test(arrivalTime)) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'invalid_time',
               message: `Invalid time format: '${arrivalTime}' (must be HH:MM:SS)`,
               file: filename,
@@ -725,11 +730,10 @@ async function processZip(buffer) {
               field: 'arrival_time',
               suggestion: 'Use HH:MM:SS format (e.g., 08:30:00 or 25:30:00 for times after midnight)'
             });
-            results.summary.warningCount++;
           }
           
           if (departureTime && !/^\d{1,2}:\d{2}:\d{2}$/.test(departureTime)) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'invalid_time',
               message: `Invalid time format: '${departureTime}' (must be HH:MM:SS)`,
               file: filename,
@@ -737,7 +741,6 @@ async function processZip(buffer) {
               field: 'departure_time',
               suggestion: 'Use HH:MM:SS format'
             });
-            results.summary.warningCount++;
           }
         }
 
@@ -747,7 +750,7 @@ async function processZip(buffer) {
           const endDate = row[headerMap['end_date']];
           
           if (startDate && !/^\d{8}$/.test(startDate)) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'invalid_date',
               message: `Invalid date format: '${startDate}' (must be YYYYMMDD)`,
               file: filename,
@@ -755,11 +758,10 @@ async function processZip(buffer) {
               field: 'start_date',
               suggestion: 'Use YYYYMMDD format (e.g., 20250101)'
             });
-            results.summary.warningCount++;
           }
           
           if (endDate && !/^\d{8}$/.test(endDate)) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'invalid_date',
               message: `Invalid date format: '${endDate}' (must be YYYYMMDD)`,
               file: filename,
@@ -767,7 +769,6 @@ async function processZip(buffer) {
               field: 'end_date',
               suggestion: 'Use YYYYMMDD format'
             });
-            results.summary.warningCount++;
           }
         }
 
@@ -780,7 +781,7 @@ async function processZip(buffer) {
               try {
                 new URL(url);
                 if (!url.startsWith('http://') && !url.startsWith('https://')) {
-                  results.warnings.push({
+                  warningBatch.push({
                     code: 'invalid_url',
                     message: `Invalid URL: '${url}' (must start with http:// or https://)`,
                     file: filename,
@@ -788,10 +789,9 @@ async function processZip(buffer) {
                     field: urlField,
                     suggestion: 'URLs must include the protocol (http:// or https://)'
                   });
-                  results.summary.warningCount++;
                 }
               } catch {
-                results.warnings.push({
+                warningBatch.push({
                   code: 'invalid_url',
                   message: `Malformed URL: '${url}'`,
                   file: filename,
@@ -799,7 +799,6 @@ async function processZip(buffer) {
                   field: urlField,
                   suggestion: 'Provide a valid URL'
                 });
-                results.summary.warningCount++;
               }
             }
           }
@@ -809,7 +808,7 @@ async function processZip(buffer) {
         if (filename === 'agency.txt' && row[headerMap['agency_email']]) {
           const email = row[headerMap['agency_email']];
           if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'invalid_email',
               message: `Invalid email format: '${email}'`,
               file: filename,
@@ -817,7 +816,6 @@ async function processZip(buffer) {
               field: 'agency_email',
               suggestion: 'Provide a valid email address'
             });
-            results.summary.warningCount++;
           }
         }
 
@@ -825,7 +823,7 @@ async function processZip(buffer) {
         if (filename === 'stop_times.txt' && row[headerMap['stop_sequence']]) {
           const stopSeq = row[headerMap['stop_sequence']];
           if (!/^\d+$/.test(stopSeq) || parseInt(stopSeq) < 0) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'invalid_integer',
               message: `Invalid integer value for stop_sequence: '${stopSeq}'`,
               file: filename,
@@ -833,7 +831,6 @@ async function processZip(buffer) {
               field: 'stop_sequence',
               suggestion: 'stop_sequence must be a non-negative integer'
             });
-            results.summary.warningCount++;
           }
         }
 
@@ -843,7 +840,7 @@ async function processZip(buffer) {
           const lon = row[headerMap['stop_lon']];
           
           if (lat && !/^-?\d+\.?\d*$/.test(lat)) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'invalid_float',
               message: `Invalid number format for latitude: '${lat}'`,
               file: filename,
@@ -851,11 +848,10 @@ async function processZip(buffer) {
               field: 'stop_lat',
               suggestion: 'Latitude must be a valid decimal number'
             });
-            results.summary.warningCount++;
           }
           
           if (lon && !/^-?\d+\.?\d*$/.test(lon)) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'invalid_float',
               message: `Invalid number format for longitude: '${lon}'`,
               file: filename,
@@ -863,7 +859,6 @@ async function processZip(buffer) {
               field: 'stop_lon',
               suggestion: 'Longitude must be a valid decimal number'
             });
-            results.summary.warningCount++;
           }
         }
 
@@ -873,30 +868,28 @@ async function processZip(buffer) {
           const routeLongName = row[headerMap['route_long_name']];
           
           if (routeShortName && /^[A-Z0-9\s\/\-]+$/.test(routeShortName) && routeShortName.length > 3) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'mixed_case_recommended_field',
               message: `Route short name should use mixed case: "${routeShortName}"`,
               file: filename,
               line: lineNumber,
               field: 'route_short_name'
             });
-            results.summary.warningCount++;
           }
           
           if (routeLongName && /^[A-Z0-9\s\/\-]+$/.test(routeLongName) && routeLongName.length > 3) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'mixed_case_recommended_field',
               message: `Route long name should use mixed case: "${routeLongName}"`,
               file: filename,
               line: lineNumber,
               field: 'route_long_name'
             });
-            results.summary.warningCount++;
           }
 
           // Check route_short_name length - WARNING
           if (routeShortName && routeShortName.length > 12) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'route_short_name_too_long',
               message: `Route short name is too long (${routeShortName.length} characters): "${routeShortName}"`,
               file: filename,
@@ -904,7 +897,6 @@ async function processZip(buffer) {
               field: 'route_short_name',
               suggestion: 'Route short name should be 12 characters or less'
             });
-            results.summary.warningCount++;
           }
         }
 
@@ -912,24 +904,36 @@ async function processZip(buffer) {
         if (filename === 'stops.txt') {
           const stopName = row[headerMap['stop_name']];
           if (stopName && /^[A-Z0-9\s\/\-]+$/.test(stopName) && stopName.length > 3) {
-            results.warnings.push({
+            warningBatch.push({
               code: 'mixed_case_recommended_field',
               message: `Stop name should use mixed case: "${stopName}"`,
               file: filename,
               line: lineNumber,
               field: 'stop_name'
             });
-            results.summary.warningCount++;
           }
         }
 
-        // Check for duplicate IDs - ERROR (SYNTAX) - TRIM VALUES
+        // Check for duplicate IDs - ERROR (SYNTAX) - TRIM VALUES AND WARN ABOUT WHITESPACE
         if (idField) {
           const actualIdField = headerMap[idField.toLowerCase()];
           const idValue = row[actualIdField];
           
           if (idValue) {
             const trimmedId = idValue.trim();
+            
+            // NEW: WARNING for leading/trailing spaces in ID fields
+            if (trimmedId && idValue !== trimmedId) {
+              warningBatch.push({
+                code: 'id_field_whitespace',
+                message: `ID field '${idField}' has leading or trailing whitespace: "${idValue}" → "${trimmedId}"`,
+                file: filename,
+                line: lineNumber,
+                field: idField,
+                suggestion: 'Remove leading/trailing spaces from ID fields. While this works (IDs are auto-trimmed), it indicates poor data quality.'
+              });
+            }
+            
             if (trimmedId) {
               if (uniqueIds.has(trimmedId)) {
                 errorBatch.push({
@@ -984,9 +988,13 @@ async function processZip(buffer) {
         }
       }
 
-      // Add batched errors
+      // Add batched errors and warnings
       results.errors.push(...errorBatch);
+      results.warnings.push(...warningBatch);
       results.summary.errorCount += errorBatch.length;
+      results.summary.warningCount += warningBatch.length;
+      fileResult.warnings += warningBatch.length;
+      
       if (errorBatch.length > 0) {
         results.summary.isValid = false;
         fileResult.errors += errorBatch.length;
@@ -1562,6 +1570,7 @@ function generateHTMLReport(results) {
     <div class="footer">
       <p>Report generated by GTFS Validator | ${new Date().toLocaleString()}</p>
       <p style="margin-top: 10px; font-size: 12px;">This validation was performed client-side in your browser. No data was uploaded to any server.</p>
+      <p style="margin-top: 5px; font-size: 12px;">IDs are automatically trimmed (like Google Transit does) - whitespace warnings indicate data quality issues but won't prevent upload.</p>
     </div>
   </div>
 </body>

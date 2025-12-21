@@ -1047,8 +1047,17 @@ async function processZip(buffer) {
       }));
     }
 
-    const totalIssues = results.summary.errorCount + (results.summary.warningCount * 0.5);
-    results.summary.score = Math.max(0, Math.round(100 - (totalIssues * 2)));
+    // Better scoring: Errors are critical (-5 pts each), Warnings are minor (-0.5 pts each)
+    // Perfect score = 100, valid feed with warnings should still score 70+
+    const errorPenalty = results.summary.errorCount * 5;
+    const warningPenalty = results.summary.warningCount * 0.5;
+    const calculatedScore = 100 - errorPenalty - warningPenalty;
+    results.summary.score = Math.max(0, Math.min(100, Math.round(calculatedScore)));
+    
+    // Ensure score is never undefined or null
+    if (results.summary.score === undefined || results.summary.score === null || isNaN(results.summary.score)) {
+      results.summary.score = results.summary.isValid ? 100 : 0;
+    }
 
     progress.value = 100;
     processingStatus.value = 'Complete!';

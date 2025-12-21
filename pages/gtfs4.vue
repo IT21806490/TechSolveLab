@@ -923,24 +923,27 @@ async function processZip(buffer) {
           }
         }
 
-        // Check for duplicate IDs - ERROR (SYNTAX)
+        // Check for duplicate IDs - ERROR (SYNTAX) - TRIM VALUES
         if (idField) {
           const actualIdField = headerMap[idField.toLowerCase()];
           const idValue = row[actualIdField];
           
           if (idValue) {
-            if (uniqueIds.has(idValue)) {
-              errorBatch.push({
-                code: 'duplicate_id',
-                message: `Duplicate ${idField}: '${idValue}'`,
-                file: filename,
-                line: lineNumber,
-                field: idField,
-                suggestion: `Ensure all ${idField} values are unique`
-              });
-              duplicateCount++;
+            const trimmedId = idValue.trim();
+            if (trimmedId) {
+              if (uniqueIds.has(trimmedId)) {
+                errorBatch.push({
+                  code: 'duplicate_id',
+                  message: `Duplicate ${idField}: '${trimmedId}'`,
+                  file: filename,
+                  line: lineNumber,
+                  field: idField,
+                  suggestion: `Ensure all ${idField} values are unique`
+                });
+                duplicateCount++;
+              }
+              uniqueIds.add(trimmedId);
             }
-            uniqueIds.add(idValue);
           }
         }
 
@@ -1240,61 +1243,86 @@ async function performFastCrossFileValidations(parsedFiles, results) {
 
     if (!stopsData || !stopTimesData || !tripsData) return;
 
-    // Build sets for FAST lookups
-    const validStopIds = new Set(stopsData.data.map(stop => stop.stop_id).filter(Boolean));
-    const validTripIds = new Set(tripsData.data.map(trip => trip.trip_id).filter(Boolean));
-    const validRouteIds = routesData ? new Set(routesData.data.map(route => route.route_id).filter(Boolean)) : new Set();
+    // Build sets for FAST lookups - TRIM ALL VALUES
+    const validStopIds = new Set();
+    stopsData.data.forEach(stop => {
+      if (stop.stop_id) validStopIds.add(stop.stop_id.trim());
+    });
     
-    // Build service IDs set
+    const validTripIds = new Set();
+    tripsData.data.forEach(trip => {
+      if (trip.trip_id) validTripIds.add(trip.trip_id.trim());
+    });
+    
+    const validRouteIds = new Set();
+    if (routesData) {
+      routesData.data.forEach(route => {
+        if (route.route_id) validRouteIds.add(route.route_id.trim());
+      });
+    }
+    
+    // Build service IDs set - TRIM ALL VALUES
     const validServiceIds = new Set();
     if (calendarData) {
       calendarData.data.forEach(cal => {
-        if (cal.service_id) validServiceIds.add(cal.service_id);
+        if (cal.service_id) validServiceIds.add(cal.service_id.trim());
       });
     }
     if (calendarDatesData) {
       calendarDatesData.data.forEach(calDate => {
-        if (calDate.service_id) validServiceIds.add(calDate.service_id);
+        if (calDate.service_id) validServiceIds.add(calDate.service_id.trim());
       });
     }
 
-    // Build agency IDs set
-    const validAgencyIds = agencyData ? new Set(agencyData.data.map(agency => agency.agency_id).filter(Boolean)) : new Set();
+    // Build agency IDs set - TRIM ALL VALUES
+    const validAgencyIds = new Set();
+    if (agencyData) {
+      agencyData.data.forEach(agency => {
+        if (agency.agency_id) validAgencyIds.add(agency.agency_id.trim());
+      });
+    }
 
     // Batch errors to improve performance
     const errorBatch = [];
     let fkViolationCount = { trip_id: 0, stop_id: 0, route_id: 0, service_id: 0, agency_id: 0 };
 
     // Foreign key validation for stop_times - CHECK ALL - ERRORS (no limits)
+    // CRITICAL: Trim all values before comparison to handle trailing spaces
     const totalStopTimes = stopTimesData.data.length;
     for (let i = 0; i < totalStopTimes; i++) {
       const stopTime = stopTimesData.data[i];
       const stopTimeRowNum = i + 2;
 
-      // Check trip_id - ERROR (required for GTFS upload)
-      if (stopTime.trip_id && !validTripIds.has(stopTime.trip_id)) {
-        errorBatch.push({
-          code: 'foreign_key_violation',
-          message: `Foreign key violation: trip_id '${stopTime.trip_id}' in stop_times.txt does not exist in trips.txt`,
-          file: 'stop_times.txt',
-          line: stopTimeRowNum,
-          field: 'trip_id',
-          suggestion: `Ensure trip_id '${stopTime.trip_id}' exists in trips.txt or remove this stop_time entry`
-        });
-        fkViolationCount.trip_id++;
+      // Check trip_id - ERROR (required for GTFS upload) - TRIM VALUES
+      if (stopTime.trip_id) {
+        const trimmedTripId = stopTime.trip_id.trim();
+        if (trimmedTripId && !validTripIds.has(trimmedTripId)) {
+          errorBatch.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: trip_id '${trimmedTripId}' in stop_times.txt does not exist in trips.txt`,
+            file: 'stop_times.txt',
+            line: stopTimeRowNum,
+            field: 'trip_id',
+            suggestion: `Ensure trip_id '${trimmedTripId}' exists in trips.txt or remove this stop_time entry`
+          });
+          fkViolationCount.trip_id++;
+        }
       }
 
-      // Check stop_id - ERROR (required for GTFS upload)
-      if (stopTime.stop_id && !validStopIds.has(stopTime.stop_id)) {
-        errorBatch.push({
-          code: 'foreign_key_violation',
-          message: `Foreign key violation: stop_id '${stopTime.stop_id}' in stop_times.txt does not exist in stops.txt`,
-          file: 'stop_times.txt',
-          line: stopTimeRowNum,
-          field: 'stop_id',
-          suggestion: `Ensure stop_id '${stopTime.stop_id}' exists in stops.txt or fix the reference`
-        });
-        fkViolationCount.stop_id++;
+      // Check stop_id - ERROR (required for GTFS upload) - TRIM VALUES
+      if (stopTime.stop_id) {
+        const trimmedStopId = stopTime.stop_id.trim();
+        if (trimmedStopId && !validStopIds.has(trimmedStopId)) {
+          errorBatch.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: stop_id '${trimmedStopId}' in stop_times.txt does not exist in stops.txt`,
+            file: 'stop_times.txt',
+            line: stopTimeRowNum,
+            field: 'stop_id',
+            suggestion: `Ensure stop_id '${trimmedStopId}' exists in stops.txt or fix the reference`
+          });
+          fkViolationCount.stop_id++;
+        }
       }
 
       // Batch processing - add errors every 1000 rows to avoid memory issues
@@ -1306,33 +1334,39 @@ async function performFastCrossFileValidations(parsedFiles, results) {
       }
     }
 
-    // Check route_id and service_id in trips - CHECK ALL - ERRORS (no limits)
+    // Check route_id and service_id in trips - CHECK ALL - ERRORS (no limits) - TRIM VALUES
     for (let i = 0; i < tripsData.data.length; i++) {
       const trip = tripsData.data[i];
       const tripRowNum = i + 2;
 
-      if (trip.route_id && !validRouteIds.has(trip.route_id)) {
-        errorBatch.push({
-          code: 'foreign_key_violation',
-          message: `Foreign key violation: route_id '${trip.route_id}' in trips.txt does not exist in routes.txt`,
-          file: 'trips.txt',
-          line: tripRowNum,
-          field: 'route_id',
-          suggestion: `Ensure route_id '${trip.route_id}' exists in routes.txt`
-        });
-        fkViolationCount.route_id++;
+      if (trip.route_id) {
+        const trimmedRouteId = trip.route_id.trim();
+        if (trimmedRouteId && !validRouteIds.has(trimmedRouteId)) {
+          errorBatch.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: route_id '${trimmedRouteId}' in trips.txt does not exist in routes.txt`,
+            file: 'trips.txt',
+            line: tripRowNum,
+            field: 'route_id',
+            suggestion: `Ensure route_id '${trimmedRouteId}' exists in routes.txt`
+          });
+          fkViolationCount.route_id++;
+        }
       }
 
-      if (validServiceIds.size > 0 && trip.service_id && !validServiceIds.has(trip.service_id)) {
-        errorBatch.push({
-          code: 'foreign_key_violation',
-          message: `Foreign key violation: service_id '${trip.service_id}' in trips.txt does not exist in calendar.txt or calendar_dates.txt`,
-          file: 'trips.txt',
-          line: tripRowNum,
-          field: 'service_id',
-          suggestion: `Ensure service_id '${trip.service_id}' exists in calendar.txt or calendar_dates.txt`
-        });
-        fkViolationCount.service_id++;
+      if (validServiceIds.size > 0 && trip.service_id) {
+        const trimmedServiceId = trip.service_id.trim();
+        if (trimmedServiceId && !validServiceIds.has(trimmedServiceId)) {
+          errorBatch.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: service_id '${trimmedServiceId}' in trips.txt does not exist in calendar.txt or calendar_dates.txt`,
+            file: 'trips.txt',
+            line: tripRowNum,
+            field: 'service_id',
+            suggestion: `Ensure service_id '${trimmedServiceId}' exists in calendar.txt or calendar_dates.txt`
+          });
+          fkViolationCount.service_id++;
+        }
       }
 
       // Batch processing
@@ -1344,20 +1378,23 @@ async function performFastCrossFileValidations(parsedFiles, results) {
       }
     }
 
-    // Check agency_id in routes if agency.txt exists - ERROR (no limits)
+    // Check agency_id in routes if agency.txt exists - ERROR (no limits) - TRIM VALUES
     if (routesData && validAgencyIds.size > 0) {
       for (let i = 0; i < routesData.data.length; i++) {
         const route = routesData.data[i];
-        if (route.agency_id && !validAgencyIds.has(route.agency_id)) {
-          errorBatch.push({
-            code: 'foreign_key_violation',
-            message: `Foreign key violation: agency_id '${route.agency_id}' in routes.txt does not exist in agency.txt`,
-            file: 'routes.txt',
-            line: i + 2,
-            field: 'agency_id',
-            suggestion: `Ensure agency_id '${route.agency_id}' exists in agency.txt`
-          });
-          fkViolationCount.agency_id++;
+        if (route.agency_id) {
+          const trimmedAgencyId = route.agency_id.trim();
+          if (trimmedAgencyId && !validAgencyIds.has(trimmedAgencyId)) {
+            errorBatch.push({
+              code: 'foreign_key_violation',
+              message: `Foreign key violation: agency_id '${trimmedAgencyId}' in routes.txt does not exist in agency.txt`,
+              file: 'routes.txt',
+              line: i + 2,
+              field: 'agency_id',
+              suggestion: `Ensure agency_id '${trimmedAgencyId}' exists in agency.txt`
+            });
+            fkViolationCount.agency_id++;
+          }
         }
       }
     }

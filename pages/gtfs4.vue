@@ -640,29 +640,25 @@ async function processZip(buffer) {
         const rowValues = Object.values(row);
         const isEmptyRow = rowValues.every(v => !v || v.trim() === '');
         if (isEmptyRow) {
-          if (errorBatch.length < 100) {
-            errorBatch.push({
-              code: 'empty_row',
-              message: `Empty row at line ${lineNumber}`,
-              file: filename,
-              line: lineNumber,
-              suggestion: 'Remove empty rows from the file'
-            });
-          }
+          errorBatch.push({
+            code: 'empty_row',
+            message: `Empty row at line ${lineNumber}`,
+            file: filename,
+            line: lineNumber,
+            suggestion: 'Remove empty rows from the file'
+          });
           continue;
         }
 
         // Check for rows with wrong number of columns - ERROR
         if (Object.keys(row).length !== headers.length) {
-          if (errorBatch.length < 100) {
-            errorBatch.push({
-              code: 'wrong_number_of_columns',
-              message: `Row has wrong number of columns (expected ${headers.length})`,
-              file: filename,
-              line: lineNumber,
-              suggestion: 'Ensure all rows have the same number of columns as the header'
-            });
-          }
+          errorBatch.push({
+            code: 'wrong_number_of_columns',
+            message: `Row has wrong number of columns (expected ${headers.length})`,
+            file: filename,
+            line: lineNumber,
+            suggestion: 'Ensure all rows have the same number of columns as the header'
+          });
         }
 
         // Check for required field values being empty - ERROR (SYNTAX)
@@ -673,16 +669,14 @@ async function processZip(buffer) {
             
             // Empty or whitespace-only values are ERRORS for required fields
             if (value === undefined || value === null || value === '' || (typeof value === 'string' && value.trim() === '')) {
-              if (errorBatch.length < 500) {
-                errorBatch.push({
-                  code: 'missing_required_value',
-                  message: `Missing required value for field '${fieldName}'`,
-                  file: filename,
-                  line: lineNumber,
-                  field: fieldName,
-                  suggestion: `Provide a non-empty value for '${fieldName}'`
-                });
-              }
+              errorBatch.push({
+                code: 'missing_required_value',
+                message: `Missing required value for field '${fieldName}'`,
+                file: filename,
+                line: lineNumber,
+                field: fieldName,
+                suggestion: `Provide a non-empty value for '${fieldName}'`
+              });
             }
           }
         }
@@ -723,29 +717,25 @@ async function processZip(buffer) {
           const departureTime = row[headerMap['departure_time']];
           
           if (arrivalTime && !/^\d{1,2}:\d{2}:\d{2}$/.test(arrivalTime)) {
-            if (errorBatch.length < 200) {
-              errorBatch.push({
-                code: 'invalid_time',
-                message: `Invalid time format: '${arrivalTime}' (must be HH:MM:SS)`,
-                file: filename,
-                line: lineNumber,
-                field: 'arrival_time',
-                suggestion: 'Use HH:MM:SS format (e.g., 08:30:00 or 25:30:00 for times after midnight)'
-              });
-            }
+            errorBatch.push({
+              code: 'invalid_time',
+              message: `Invalid time format: '${arrivalTime}' (must be HH:MM:SS)`,
+              file: filename,
+              line: lineNumber,
+              field: 'arrival_time',
+              suggestion: 'Use HH:MM:SS format (e.g., 08:30:00 or 25:30:00 for times after midnight)'
+            });
           }
           
           if (departureTime && !/^\d{1,2}:\d{2}:\d{2}$/.test(departureTime)) {
-            if (errorBatch.length < 200) {
-              errorBatch.push({
-                code: 'invalid_time',
-                message: `Invalid time format: '${departureTime}' (must be HH:MM:SS)`,
-                file: filename,
-                line: lineNumber,
-                field: 'departure_time',
-                suggestion: 'Use HH:MM:SS format'
-              });
-            }
+            errorBatch.push({
+              code: 'invalid_time',
+              message: `Invalid time format: '${departureTime}' (must be HH:MM:SS)`,
+              file: filename,
+              line: lineNumber,
+              field: 'departure_time',
+              suggestion: 'Use HH:MM:SS format'
+            });
           }
         }
 
@@ -874,16 +864,14 @@ async function processZip(buffer) {
           
           if (idValue) {
             if (uniqueIds.has(idValue)) {
-              if (duplicateCount < 100) {
-                errorBatch.push({
-                  code: 'duplicate_id',
-                  message: `Duplicate ${idField}: '${idValue}'`,
-                  file: filename,
-                  line: lineNumber,
-                  field: idField,
-                  suggestion: `Ensure all ${idField} values are unique`
-                });
-              }
+              errorBatch.push({
+                code: 'duplicate_id',
+                message: `Duplicate ${idField}: '${idValue}'`,
+                file: filename,
+                line: lineNumber,
+                field: idField,
+                suggestion: `Ensure all ${idField} values are unique`
+              });
               duplicateCount++;
             }
             uniqueIds.add(idValue);
@@ -898,16 +886,14 @@ async function processZip(buffer) {
           if (latValue) {
             const lat = parseFloat(latValue);
             if (isNaN(lat) || lat < -90 || lat > 90) {
-              if (invalidCoordCount < 100) {
-                errorBatch.push({
-                  code: 'out_of_range',
-                  message: `Invalid latitude value: ${latValue} (must be between -90 and 90)`,
-                  file: filename,
-                  line: lineNumber,
-                  field: 'stop_lat',
-                  suggestion: 'Latitude must be between -90 and 90'
-                });
-              }
+              errorBatch.push({
+                code: 'out_of_range',
+                message: `Invalid latitude value: ${latValue} (must be between -90 and 90)`,
+                file: filename,
+                line: lineNumber,
+                field: 'stop_lat',
+                suggestion: 'Latitude must be between -90 and 90'
+              });
               invalidCoordCount++;
             }
           }
@@ -915,16 +901,14 @@ async function processZip(buffer) {
           if (lonValue) {
             const lon = parseFloat(lonValue);
             if (isNaN(lon) || lon < -180 || lon > 180) {
-              if (invalidCoordCount < 100) {
-                errorBatch.push({
-                  code: 'out_of_range',
-                  message: `Invalid longitude value: ${lonValue} (must be between -180 and 180)`,
-                  file: filename,
-                  line: lineNumber,
-                  field: 'stop_lon',
-                  suggestion: 'Longitude must be between -180 and 180'
-                });
-              }
+              errorBatch.push({
+                code: 'out_of_range',
+                message: `Invalid longitude value: ${lonValue} (must be between -180 and 180)`,
+                file: filename,
+                line: lineNumber,
+                field: 'stop_lon',
+                suggestion: 'Longitude must be between -180 and 180'
+              });
               invalidCoordCount++;
             }
           }
@@ -938,26 +922,6 @@ async function processZip(buffer) {
         results.summary.isValid = false;
         fileResult.errors += errorBatch.length;
         fileResult.status = 'error';
-      }
-
-      // Add summary if we hit limits
-      if (duplicateCount > 100) {
-        results.errors.push({
-          code: 'duplicate_id',
-          message: `... and ${duplicateCount - 100} more duplicate ${idField} errors (total: ${duplicateCount})`,
-          file: filename,
-          suggestion: 'Review all duplicate IDs in this file'
-        });
-        results.summary.errorCount++;
-      }
-      if (invalidCoordCount > 100) {
-        results.errors.push({
-          code: 'out_of_range',
-          message: `... and ${invalidCoordCount - 100} more coordinate errors (total: ${invalidCoordCount})`,
-          file: filename,
-          suggestion: 'Review all coordinates in this file'
-        });
-        results.summary.errorCount++;
       }
 
       results.fileDetails[filename] = fileResult;
@@ -1235,7 +1199,7 @@ async function performFastCrossFileValidations(parsedFiles, results) {
     const errorBatch = [];
     let fkViolationCount = { trip_id: 0, stop_id: 0, route_id: 0, service_id: 0, agency_id: 0 };
 
-    // Foreign key validation for stop_times - CHECK ALL but batch ERRORS
+    // Foreign key validation for stop_times - CHECK ALL - ERRORS (no limits)
     const totalStopTimes = stopTimesData.data.length;
     for (let i = 0; i < totalStopTimes; i++) {
       const stopTime = stopTimesData.data[i];
@@ -1243,31 +1207,27 @@ async function performFastCrossFileValidations(parsedFiles, results) {
 
       // Check trip_id - ERROR (required for GTFS upload)
       if (stopTime.trip_id && !validTripIds.has(stopTime.trip_id)) {
-        if (fkViolationCount.trip_id < 100) {
-          errorBatch.push({
-            code: 'foreign_key_violation',
-            message: `Foreign key violation: trip_id '${stopTime.trip_id}' in stop_times.txt does not exist in trips.txt`,
-            file: 'stop_times.txt',
-            line: stopTimeRowNum,
-            field: 'trip_id',
-            suggestion: `Ensure trip_id '${stopTime.trip_id}' exists in trips.txt or remove this stop_time entry`
-          });
-        }
+        errorBatch.push({
+          code: 'foreign_key_violation',
+          message: `Foreign key violation: trip_id '${stopTime.trip_id}' in stop_times.txt does not exist in trips.txt`,
+          file: 'stop_times.txt',
+          line: stopTimeRowNum,
+          field: 'trip_id',
+          suggestion: `Ensure trip_id '${stopTime.trip_id}' exists in trips.txt or remove this stop_time entry`
+        });
         fkViolationCount.trip_id++;
       }
 
       // Check stop_id - ERROR (required for GTFS upload)
       if (stopTime.stop_id && !validStopIds.has(stopTime.stop_id)) {
-        if (fkViolationCount.stop_id < 100) {
-          errorBatch.push({
-            code: 'foreign_key_violation',
-            message: `Foreign key violation: stop_id '${stopTime.stop_id}' in stop_times.txt does not exist in stops.txt`,
-            file: 'stop_times.txt',
-            line: stopTimeRowNum,
-            field: 'stop_id',
-            suggestion: `Ensure stop_id '${stopTime.stop_id}' exists in stops.txt or fix the reference`
-          });
-        }
+        errorBatch.push({
+          code: 'foreign_key_violation',
+          message: `Foreign key violation: stop_id '${stopTime.stop_id}' in stop_times.txt does not exist in stops.txt`,
+          file: 'stop_times.txt',
+          line: stopTimeRowNum,
+          field: 'stop_id',
+          suggestion: `Ensure stop_id '${stopTime.stop_id}' exists in stops.txt or fix the reference`
+        });
         fkViolationCount.stop_id++;
       }
 
@@ -1280,36 +1240,32 @@ async function performFastCrossFileValidations(parsedFiles, results) {
       }
     }
 
-    // Check route_id and service_id in trips - CHECK ALL - ERRORS
+    // Check route_id and service_id in trips - CHECK ALL - ERRORS (no limits)
     for (let i = 0; i < tripsData.data.length; i++) {
       const trip = tripsData.data[i];
       const tripRowNum = i + 2;
 
       if (trip.route_id && !validRouteIds.has(trip.route_id)) {
-        if (fkViolationCount.route_id < 100) {
-          errorBatch.push({
-            code: 'foreign_key_violation',
-            message: `Foreign key violation: route_id '${trip.route_id}' in trips.txt does not exist in routes.txt`,
-            file: 'trips.txt',
-            line: tripRowNum,
-            field: 'route_id',
-            suggestion: `Ensure route_id '${trip.route_id}' exists in routes.txt`
-          });
-        }
+        errorBatch.push({
+          code: 'foreign_key_violation',
+          message: `Foreign key violation: route_id '${trip.route_id}' in trips.txt does not exist in routes.txt`,
+          file: 'trips.txt',
+          line: tripRowNum,
+          field: 'route_id',
+          suggestion: `Ensure route_id '${trip.route_id}' exists in routes.txt`
+        });
         fkViolationCount.route_id++;
       }
 
       if (validServiceIds.size > 0 && trip.service_id && !validServiceIds.has(trip.service_id)) {
-        if (fkViolationCount.service_id < 100) {
-          errorBatch.push({
-            code: 'foreign_key_violation',
-            message: `Foreign key violation: service_id '${trip.service_id}' in trips.txt does not exist in calendar.txt or calendar_dates.txt`,
-            file: 'trips.txt',
-            line: tripRowNum,
-            field: 'service_id',
-            suggestion: `Ensure service_id '${trip.service_id}' exists in calendar.txt or calendar_dates.txt`
-          });
-        }
+        errorBatch.push({
+          code: 'foreign_key_violation',
+          message: `Foreign key violation: service_id '${trip.service_id}' in trips.txt does not exist in calendar.txt or calendar_dates.txt`,
+          file: 'trips.txt',
+          line: tripRowNum,
+          field: 'service_id',
+          suggestion: `Ensure service_id '${trip.service_id}' exists in calendar.txt or calendar_dates.txt`
+        });
         fkViolationCount.service_id++;
       }
 
@@ -1322,21 +1278,19 @@ async function performFastCrossFileValidations(parsedFiles, results) {
       }
     }
 
-    // Check agency_id in routes if agency.txt exists - ERROR
+    // Check agency_id in routes if agency.txt exists - ERROR (no limits)
     if (routesData && validAgencyIds.size > 0) {
       for (let i = 0; i < routesData.data.length; i++) {
         const route = routesData.data[i];
         if (route.agency_id && !validAgencyIds.has(route.agency_id)) {
-          if (fkViolationCount.agency_id < 100) {
-            errorBatch.push({
-              code: 'foreign_key_violation',
-              message: `Foreign key violation: agency_id '${route.agency_id}' in routes.txt does not exist in agency.txt`,
-              file: 'routes.txt',
-              line: i + 2,
-              field: 'agency_id',
-              suggestion: `Ensure agency_id '${route.agency_id}' exists in agency.txt`
-            });
-          }
+          errorBatch.push({
+            code: 'foreign_key_violation',
+            message: `Foreign key violation: agency_id '${route.agency_id}' in routes.txt does not exist in agency.txt`,
+            file: 'routes.txt',
+            line: i + 2,
+            field: 'agency_id',
+            suggestion: `Ensure agency_id '${route.agency_id}' exists in agency.txt`
+          });
           fkViolationCount.agency_id++;
         }
       }
@@ -1346,58 +1300,6 @@ async function performFastCrossFileValidations(parsedFiles, results) {
     if (errorBatch.length > 0) {
       results.errors.push(...errorBatch);
       results.summary.errorCount += errorBatch.length;
-      results.summary.isValid = false;
-    }
-
-    // Add summary errors if we hit limits
-    if (fkViolationCount.trip_id > 100) {
-      results.errors.push({
-        code: 'foreign_key_violation',
-        message: `... and ${fkViolationCount.trip_id - 100} more trip_id foreign key violations (total: ${fkViolationCount.trip_id})`,
-        file: 'stop_times.txt',
-        suggestion: 'Fix all trip_id references - these must exist in trips.txt to upload to GTFS cloud'
-      });
-      results.summary.errorCount++;
-      results.summary.isValid = false;
-    }
-    if (fkViolationCount.stop_id > 100) {
-      results.errors.push({
-        code: 'foreign_key_violation',
-        message: `... and ${fkViolationCount.stop_id - 100} more stop_id foreign key violations (total: ${fkViolationCount.stop_id})`,
-        file: 'stop_times.txt',
-        suggestion: 'Fix all stop_id references - these must exist in stops.txt to upload to GTFS cloud'
-      });
-      results.summary.errorCount++;
-      results.summary.isValid = false;
-    }
-    if (fkViolationCount.route_id > 100) {
-      results.errors.push({
-        code: 'foreign_key_violation',
-        message: `... and ${fkViolationCount.route_id - 100} more route_id foreign key violations (total: ${fkViolationCount.route_id})`,
-        file: 'trips.txt',
-        suggestion: 'Fix all route_id references - these must exist in routes.txt to upload to GTFS cloud'
-      });
-      results.summary.errorCount++;
-      results.summary.isValid = false;
-    }
-    if (fkViolationCount.service_id > 100) {
-      results.errors.push({
-        code: 'foreign_key_violation',
-        message: `... and ${fkViolationCount.service_id - 100} more service_id foreign key violations (total: ${fkViolationCount.service_id})`,
-        file: 'trips.txt',
-        suggestion: 'Fix all service_id references - these must exist in calendar.txt or calendar_dates.txt to upload to GTFS cloud'
-      });
-      results.summary.errorCount++;
-      results.summary.isValid = false;
-    }
-    if (fkViolationCount.agency_id > 100) {
-      results.errors.push({
-        code: 'foreign_key_violation',
-        message: `... and ${fkViolationCount.agency_id - 100} more agency_id foreign key violations (total: ${fkViolationCount.agency_id})`,
-        file: 'routes.txt',
-        suggestion: 'Fix all agency_id references - these must exist in agency.txt to upload to GTFS cloud'
-      });
-      results.summary.errorCount++;
       results.summary.isValid = false;
     }
 

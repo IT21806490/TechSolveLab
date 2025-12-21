@@ -621,14 +621,244 @@ async function processZip(buffer) {
         const row = parsed.data[i];
         const lineNumber = i + 2;
 
-        // Check for duplicate IDs - ERROR
+        // Check for completely empty rows - ERROR
+        const rowValues = Object.values(row);
+        const isEmptyRow = rowValues.every(v => !v || v.trim() === '');
+        if (isEmptyRow) {
+          if (errorBatch.length < 100) {
+            errorBatch.push({
+              code: 'empty_row',
+              message: `Empty row at line ${lineNumber}`,
+              file: filename,
+              line: lineNumber,
+              suggestion: 'Remove empty rows from the file'
+            });
+          }
+          continue;
+        }
+
+        // Check for rows with wrong number of columns - ERROR
+        if (Object.keys(row).length !== headers.length) {
+          if (errorBatch.length < 100) {
+            errorBatch.push({
+              code: 'wrong_number_of_columns',
+              message: `Row has wrong number of columns (expected ${headers.length})`,
+              file: filename,
+              line: lineNumber,
+              suggestion: 'Ensure all rows have the same number of columns as the header'
+            });
+          }
+        }
+
+        // Check for required field values being empty - ERROR (SYNTAX)
+        for (const [fieldName, fieldSpec] of Object.entries(spec.fields)) {
+          if (fieldSpec.required) {
+            const actualFieldName = headerMap[fieldName.toLowerCase()];
+            const value = row[actualFieldName];
+            
+            // Empty or whitespace-only values are ERRORS for required fields
+            if (value === undefined || value === null || value === '' || (typeof value === 'string' && value.trim() === '')) {
+              if (errorBatch.length < 500) {
+                errorBatch.push({
+                  code: 'missing_required_value',
+                  message: `Missing required value for field '${fieldName}'`,
+                  file: filename,
+                  line: lineNumber,
+                  field: fieldName,
+                  suggestion: `Provide a non-empty value for '${fieldName}'`
+                });
+              }
+            }
+          }
+        }
+
+        // Check for invalid UTF-8 characters - ERROR
+        for (const [key, value] of Object.entries(row)) {
+          if (value && typeof value === 'string') {
+            // Check for NULL bytes
+            if (value.includes('\0')) {
+              errorBatch.push({
+                code: 'invalid_character',
+                message: `NULL byte character found in field '${key}'`,
+                file: filename,
+                line: lineNumber,
+                field: key,
+                suggestion: 'Remove NULL bytes from the data'
+              });
+            }
+            
+            // Check for invalid control characters (except tab, newline, carriage return)
+            if (/[\x00-\x08\x0B\x0C\x0E-\x1F]/.test(value)) {
+              errorBatch.push({
+                code: 'invalid_character',
+                message: `Invalid control character in field '${key}'`,
+                file: filename,
+                line: lineNumber,
+                field: key,
+                suggestion: 'Remove invalid control characters'
+              });
+            }
+          }
+        }
+
+        // Validate specific field formats
+        // Time format validation
+        if (filename === 'stop_times.txt') {
+          const arrivalTime = row[headerMap['arrival_time']];
+          const departureTime = row[headerMap['departure_time']];
+          
+          if (arrivalTime && !/^\d{1,2}:\d{2}:\d{2}$/.test(arrivalTime)) {
+            if (errorBatch.length < 200) {
+              errorBatch.push({
+                code: 'invalid_time',
+                message: `Invalid time format: '${arrivalTime}' (must be HH:MM:SS)`,
+                file: filename,
+                line: lineNumber,
+                field: 'arrival_time',
+                suggestion: 'Use HH:MM:SS format (e.g., 08:30:00 or 25:30:00 for times after midnight)'
+              });
+            }
+          }
+          
+          if (departureTime && !/^\d{1,2}:\d{2}:\d{2}$/.test(departureTime)) {
+            if (errorBatch.length < 200) {
+              errorBatch.push({
+                code: 'invalid_time',
+                message: `Invalid time format: '${departureTime}' (must be HH:MM:SS)`,
+                file: filename,
+                line: lineNumber,
+                field: 'departure_time',
+                suggestion: 'Use HH:MM:SS format'
+              });
+            }
+          }
+        }
+
+        // Date format validation (YYYYMMDD)
+        if (filename === 'calendar.txt') {
+          const startDate = row[headerMap['start_date']];
+          const endDate = row[headerMap['end_date']];
+          
+          if (startDate && !/^\d{8}$/.test(startDate)) {
+            errorBatch.push({
+              code: 'invalid_date',
+              message: `Invalid date format: '${startDate}' (must be YYYYMMDD)`,
+              file: filename,
+              line: lineNumber,
+              field: 'start_date',
+              suggestion: 'Use YYYYMMDD format (e.g., 20250101)'
+            });
+          }
+          
+          if (endDate && !/^\d{8}$/.test(endDate)) {
+            errorBatch.push({
+              code: 'invalid_date',
+              message: `Invalid date format: '${endDate}' (must be YYYYMMDD)`,
+              file: filename,
+              line: lineNumber,
+              field: 'end_date',
+              suggestion: 'Use YYYYMMDD format'
+            });
+          }
+        }
+
+        // URL validation
+        if (filename === 'agency.txt' || filename === 'routes.txt' || filename === 'stops.txt') {
+          const urlFields = ['agency_url', 'route_url', 'stop_url', 'agency_fare_url'];
+          for (const urlField of urlFields) {
+            const url = row[headerMap[urlField.toLowerCase()]];
+            if (url && url.trim() !== '') {
+              try {
+                new URL(url);
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                  errorBatch.push({
+                    code: 'invalid_url',
+                    message: `Invalid URL: '${url}' (must start with http:// or https://)`,
+                    file: filename,
+                    line: lineNumber,
+                    field: urlField,
+                    suggestion: 'URLs must include the protocol (http:// or https://)'
+                  });
+                }
+              } catch {
+                errorBatch.push({
+                  code: 'invalid_url',
+                  message: `Malformed URL: '${url}'`,
+                  file: filename,
+                  line: lineNumber,
+                  field: urlField,
+                  suggestion: 'Provide a valid URL'
+                });
+              }
+            }
+          }
+        }
+
+        // Email validation
+        if (filename === 'agency.txt' && row[headerMap['agency_email']]) {
+          const email = row[headerMap['agency_email']];
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            errorBatch.push({
+              code: 'invalid_email',
+              message: `Invalid email format: '${email}'`,
+              file: filename,
+              line: lineNumber,
+              field: 'agency_email',
+              suggestion: 'Provide a valid email address'
+            });
+          }
+        }
+
+        // Integer validation
+        if (filename === 'stop_times.txt' && row[headerMap['stop_sequence']]) {
+          const stopSeq = row[headerMap['stop_sequence']];
+          if (!/^\d+$/.test(stopSeq) || parseInt(stopSeq) < 0) {
+            errorBatch.push({
+              code: 'invalid_integer',
+              message: `Invalid integer value for stop_sequence: '${stopSeq}'`,
+              file: filename,
+              line: lineNumber,
+              field: 'stop_sequence',
+              suggestion: 'stop_sequence must be a non-negative integer'
+            });
+          }
+        }
+
+        // Float validation for coordinates
+        if (filename === 'stops.txt') {
+          const lat = row[headerMap['stop_lat']];
+          const lon = row[headerMap['stop_lon']];
+          
+          if (lat && !/^-?\d+\.?\d*$/.test(lat)) {
+            errorBatch.push({
+              code: 'invalid_float',
+              message: `Invalid number format for latitude: '${lat}'`,
+              file: filename,
+              line: lineNumber,
+              field: 'stop_lat',
+              suggestion: 'Latitude must be a valid decimal number'
+            });
+          }
+          
+          if (lon && !/^-?\d+\.?\d*$/.test(lon)) {
+            errorBatch.push({
+              code: 'invalid_float',
+              message: `Invalid number format for longitude: '${lon}'`,
+              file: filename,
+              line: lineNumber,
+              field: 'stop_lon',
+              suggestion: 'Longitude must be a valid decimal number'
+            });
+          }
+        }
+
+        // Check for duplicate IDs - ERROR (SYNTAX)
         if (idField) {
           const actualIdField = headerMap[idField.toLowerCase()];
           const idValue = row[actualIdField];
           
           if (idValue) {
             if (uniqueIds.has(idValue)) {
-              // Limit duplicate errors to first 100 to avoid massive reports
               if (duplicateCount < 100) {
                 errorBatch.push({
                   code: 'duplicate_id',
@@ -645,37 +875,43 @@ async function processZip(buffer) {
           }
         }
 
-        // Check stops coordinates - ERROR for invalid values
+        // Check stops coordinates - ERROR (SYNTAX - invalid range)
         if (filename === 'stops.txt') {
-          const lat = parseFloat(row[headerMap['stop_lat']]);
-          const lon = parseFloat(row[headerMap['stop_lon']]);
+          const latValue = row[headerMap['stop_lat']];
+          const lonValue = row[headerMap['stop_lon']];
           
-          if (row[headerMap['stop_lat']] && (isNaN(lat) || lat < -90 || lat > 90)) {
-            if (invalidCoordCount < 100) {
-              errorBatch.push({
-                code: 'location_without_parent_station',
-                message: `Invalid latitude value: ${row[headerMap['stop_lat']]}`,
-                file: filename,
-                line: lineNumber,
-                field: 'stop_lat',
-                suggestion: 'Latitude must be between -90 and 90'
-              });
+          if (latValue) {
+            const lat = parseFloat(latValue);
+            if (isNaN(lat) || lat < -90 || lat > 90) {
+              if (invalidCoordCount < 100) {
+                errorBatch.push({
+                  code: 'out_of_range',
+                  message: `Invalid latitude value: ${latValue} (must be between -90 and 90)`,
+                  file: filename,
+                  line: lineNumber,
+                  field: 'stop_lat',
+                  suggestion: 'Latitude must be between -90 and 90'
+                });
+              }
+              invalidCoordCount++;
             }
-            invalidCoordCount++;
           }
           
-          if (row[headerMap['stop_lon']] && (isNaN(lon) || lon < -180 || lon > 180)) {
-            if (invalidCoordCount < 100) {
-              errorBatch.push({
-                code: 'location_without_parent_station',
-                message: `Invalid longitude value: ${row[headerMap['stop_lon']]}`,
-                file: filename,
-                line: lineNumber,
-                field: 'stop_lon',
-                suggestion: 'Longitude must be between -180 and 180'
-              });
+          if (lonValue) {
+            const lon = parseFloat(lonValue);
+            if (isNaN(lon) || lon < -180 || lon > 180) {
+              if (invalidCoordCount < 100) {
+                errorBatch.push({
+                  code: 'out_of_range',
+                  message: `Invalid longitude value: ${lonValue} (must be between -180 and 180)`,
+                  file: filename,
+                  line: lineNumber,
+                  field: 'stop_lon',
+                  suggestion: 'Longitude must be between -180 and 180'
+                });
+              }
+              invalidCoordCount++;
             }
-            invalidCoordCount++;
           }
         }
       }

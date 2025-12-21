@@ -1049,13 +1049,27 @@ async function processZip(buffer) {
 
     // Better scoring: Errors are critical (-5 pts each), Warnings are minor (-0.5 pts each)
     // Perfect score = 100, valid feed with warnings should still score 70+
+    console.log('=== SCORE CALCULATION DEBUG ===');
+    console.log('Error Count:', results.summary.errorCount);
+    console.log('Warning Count:', results.summary.warningCount);
+    
     const errorPenalty = results.summary.errorCount * 5;
     const warningPenalty = results.summary.warningCount * 0.5;
     const calculatedScore = 100 - errorPenalty - warningPenalty;
+    
+    console.log('Error Penalty:', errorPenalty);
+    console.log('Warning Penalty:', warningPenalty);
+    console.log('Calculated Score (before clamp):', calculatedScore);
+    
     results.summary.score = Math.max(0, Math.min(100, Math.round(calculatedScore)));
+    
+    console.log('Final Score:', results.summary.score);
+    console.log('Is Valid:', results.summary.isValid);
+    console.log('================================');
     
     // Ensure score is never undefined or null
     if (results.summary.score === undefined || results.summary.score === null || isNaN(results.summary.score)) {
+      console.warn('Score was invalid, setting default');
       results.summary.score = results.summary.isValid ? 100 : 0;
     }
 

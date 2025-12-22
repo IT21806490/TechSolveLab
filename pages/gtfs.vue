@@ -367,6 +367,7 @@ function processCSV(csvText) {
     }
 
     let startIdx = 0;
+    let lastProcessedIdx = -1;
     
     while (startIdx < times.length - 1) {
       let endIdx = startIdx + 1;
@@ -389,23 +390,29 @@ function processCSV(csvText) {
         exact_times: globalExactTimes.value,
       });
 
+      // Track the last processed index
+      lastProcessedIdx = endIdx;
+      
       // Move to the next unmerged time
       startIdx = endIdx + 1;
     }
 
-    // Always add wrap-around entry from last time to first time of next day
-    const lastTime = times[times.length - 1];
-    const firstTime = times[0];
-    const nextDayFirstTime = firstTime + 86400; // Add 24 hours
-    const wrapHeadway = nextDayFirstTime - lastTime;
+    // Only add wrap-around entry if the last time wasn't included in any frequency entry
+    // (i.e., there's a single time at the end with no pair)
+    if (lastProcessedIdx < times.length - 1) {
+      const lastTime = times[times.length - 1];
+      const firstTime = times[0];
+      const nextDayFirstTime = firstTime + 86400; // Add 24 hours
+      const wrapHeadway = nextDayFirstTime - lastTime;
 
-    frequencies.value.push({
-      trip_id,
-      start_time: secondsToHHMMSS(lastTime),
-      end_time: secondsToHHMMSS(nextDayFirstTime),
-      headway_secs: wrapHeadway,
-      exact_times: globalExactTimes.value,
-    });
+      frequencies.value.push({
+        trip_id,
+        start_time: secondsToHHMMSS(lastTime),
+        end_time: secondsToHHMMSS(nextDayFirstTime),
+        headway_secs: wrapHeadway,
+        exact_times: globalExactTimes.value,
+      });
+    }
   }
 }
 

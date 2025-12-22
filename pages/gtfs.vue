@@ -206,10 +206,10 @@
                   {{ row.trip_id }}
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-700">
-                  {{ formatTimeDisplay(row.start_time) }}
+                  {{ row.start_time }}
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-700">
-                  {{ formatTimeDisplay(row.end_time) }}
+                  {{ row.end_time }}
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-700">
                   {{ row.headway_secs }}
@@ -311,22 +311,6 @@ function secondsToHHMMSS(seconds) {
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
   return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
-}
-
-// Format time for display: converts times beyond 24 hours to valid 24-hour format
-function formatTimeDisplay(timeStr) {
-  const parts = timeStr.split(":");
-  let hours = parseInt(parts[0], 10);
-  const minutes = parts[1];
-  const seconds = parts[2];
-  
-  // If hours are 24 or more, wrap to valid 24-hour time
-  if (hours >= 24) {
-    hours = hours % 24;
-  }
-  
-  // Return in 24-hour format
-  return `${String(hours).padStart(2, '0')}:${minutes}:${seconds}`;
 }
 
 function handleFile(event) {
@@ -439,7 +423,7 @@ function downloadFrequencies() {
     frequencies.value
       .map(
         (r) =>
-          `${r.trip_id},${formatTimeDisplay(r.start_time)},${formatTimeDisplay(r.end_time)},${r.headway_secs},${globalExactTimes.value}`
+          `${r.trip_id},${r.start_time},${r.end_time},${r.headway_secs},${globalExactTimes.value}`
       )
       .join("\n");
 

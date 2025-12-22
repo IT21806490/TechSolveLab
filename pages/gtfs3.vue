@@ -9,7 +9,7 @@
               ⏱️ GTFS Stop Times Generator
             </h1>
             <p class="text-gray-600">
-              Upload stops.txt and generate stop_times.txt with automatic time calculations
+              Upload stops.txt and generate stop_times.txt with automatic or custom time calculations
             </p>
           </div>
         </div>
@@ -64,7 +64,7 @@
           2. Configure Trip Details
         </h2>
         
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Trip ID
@@ -87,7 +87,72 @@
               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
-          
+        </div>
+
+        <!-- Time Mode Selection -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-3">
+            Time Calculation Mode
+          </label>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div 
+              @click="timeMode = 'even'"
+              :class="[
+                'p-4 border-2 rounded-lg cursor-pointer transition-all',
+                timeMode === 'even' 
+                  ? 'border-purple-500 bg-purple-50' 
+                  : 'border-gray-300 hover:border-purple-300'
+              ]"
+            >
+              <div class="flex items-start">
+                <div class="flex-shrink-0 mt-1">
+                  <div :class="[
+                    'w-5 h-5 rounded-full border-2 flex items-center justify-center',
+                    timeMode === 'even' ? 'border-purple-500' : 'border-gray-300'
+                  ]">
+                    <div v-if="timeMode === 'even'" class="w-3 h-3 rounded-full bg-purple-500"></div>
+                  </div>
+                </div>
+                <div class="ml-3 flex-1">
+                  <h3 class="font-semibold text-gray-800 mb-1">Even Distribution</h3>
+                  <p class="text-sm text-gray-600">
+                    Specify total trip duration and distribute time evenly across all stops
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div 
+              @click="timeMode = 'custom'"
+              :class="[
+                'p-4 border-2 rounded-lg cursor-pointer transition-all',
+                timeMode === 'custom' 
+                  ? 'border-purple-500 bg-purple-50' 
+                  : 'border-gray-300 hover:border-purple-300'
+              ]"
+            >
+              <div class="flex items-start">
+                <div class="flex-shrink-0 mt-1">
+                  <div :class="[
+                    'w-5 h-5 rounded-full border-2 flex items-center justify-center',
+                    timeMode === 'custom' ? 'border-purple-500' : 'border-gray-300'
+                  ]">
+                    <div v-if="timeMode === 'custom'" class="w-3 h-3 rounded-full bg-purple-500"></div>
+                  </div>
+                </div>
+                <div class="ml-3 flex-1">
+                  <h3 class="font-semibold text-gray-800 mb-1">Custom Time Gaps</h3>
+                  <p class="text-sm text-gray-600">
+                    Set individual time gaps (in minutes) between each stop
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Even Distribution Mode -->
+        <div v-if="timeMode === 'even'" class="space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Total Trip Duration (minutes)
@@ -100,19 +165,36 @@
               min="1"
             />
           </div>
+
+          <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
+            <div class="flex items-start">
+              <svg class="w-5 h-5 text-blue-500 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+              </svg>
+              <div class="flex-1">
+                <p class="text-blue-700 text-sm mb-2">
+                  <strong>How it works:</strong> The total trip duration will be divided evenly across all selected stops.
+                </p>
+                <p class="text-blue-600 text-xs">
+                  Example: 5 stops with 120 min = First stop at start time, then +30 min, +60 min, +90 min, +120 min
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
+        <!-- Custom Time Gaps Mode -->
+        <div v-if="timeMode === 'custom'" class="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
           <div class="flex items-start">
             <svg class="w-5 h-5 text-blue-500 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
             </svg>
             <div class="flex-1">
               <p class="text-blue-700 text-sm mb-2">
-                <strong>Time Calculation:</strong> Times will be automatically calculated by distributing the total trip duration evenly across all selected stops.
+                <strong>How it works:</strong> After selecting stops, you can specify the time gap (in minutes) between each stop.
               </p>
               <p class="text-blue-600 text-xs">
-                Example: 5 stops with 120 min duration = First stop at start time, then stops at +30 min, +60 min, +90 min, +120 min
+                Example: Stop 1 → 15 min → Stop 2 → 40 min → Stop 3 → 25 min → Stop 4
               </p>
             </div>
           </div>
@@ -174,6 +256,9 @@
           <div class="flex justify-between items-center mb-3">
             <h3 class="text-lg font-semibold text-gray-800">
               Selected Stops ({{ selectedStops.length }})
+              <span v-if="timeMode === 'custom' && totalCalculatedTime > 0" class="text-sm font-normal text-purple-600 ml-2">
+                Total: {{ totalCalculatedTime }} minutes
+              </span>
             </h3>
             <button
               @click="clearAllStops"
@@ -198,6 +283,25 @@
                   <div class="text-sm text-gray-500">{{ stop.stop_id }}</div>
                 </div>
               </div>
+              
+              <!-- Custom Time Gap Input -->
+              <div v-if="timeMode === 'custom' && index < selectedStops.length - 1" class="flex items-center space-x-2 mr-4">
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <input
+                  type="number"
+                  v-model.number="stop.timeGapAfter"
+                  class="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  placeholder="min"
+                  min="0"
+                />
+                <span class="text-xs text-gray-500">min</span>
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                </svg>
+              </div>
+
               <div class="flex items-center space-x-2">
                 <button
                   @click="moveUp(index)"
@@ -246,7 +350,7 @@
       </div>
 
       <!-- Step 4: Generate and Preview -->
-      <div v-if="selectedStops.length > 0 && tripId && startTime && totalDuration" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div v-if="selectedStops.length > 0 && tripId && startTime && (timeMode === 'custom' || totalDuration)" class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold text-gray-800">
             4. Preview and Generate
@@ -358,6 +462,12 @@ const tripId = ref("");
 const startTime = ref("08:00");
 const totalDuration = ref(120);
 const generatedStopTimes = ref([]);
+const timeMode = ref("even"); // "even" or "custom"
+
+const totalCalculatedTime = computed(() => {
+  if (timeMode.value !== "custom") return 0;
+  return selectedStops.value.reduce((sum, stop) => sum + (stop.timeGapAfter || 0), 0);
+});
 
 function handleStopsFile(event) {
   const file = event.target.files[0];
@@ -380,7 +490,7 @@ function parseStopsFile(content) {
     return;
   }
 
-  // Parse header - simple split is OK for headers
+  // Parse header
   const headers = lines[0].split(',').map(h => h.trim());
   
   // Find column indices
@@ -400,7 +510,6 @@ function parseStopsFile(content) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Simple CSV parser that handles quoted fields
     const parts = parseCSVLine(line);
     
     allStops.value.push({
@@ -454,7 +563,10 @@ function filterStops() {
 }
 
 function addStop(stop) {
-  selectedStops.value.push({ ...stop });
+  selectedStops.value.push({ 
+    ...stop, 
+    timeGapAfter: 0 // Minutes to next stop
+  });
   searchQuery.value = "";
   filteredStops.value = [];
   generatedStopTimes.value = []; // Clear generated times when stops change
@@ -487,8 +599,13 @@ function moveDown(index) {
 }
 
 function generateStopTimes() {
-  if (!tripId.value || !startTime.value || !totalDuration.value || selectedStops.value.length === 0) {
+  if (!tripId.value || !startTime.value || selectedStops.value.length === 0) {
     alert("Please fill in all required fields and select at least one stop");
+    return;
+  }
+
+  if (timeMode.value === "even" && !totalDuration.value) {
+    alert("Please enter total trip duration");
     return;
   }
 
@@ -498,33 +615,59 @@ function generateStopTimes() {
   const [startHour, startMinute] = startTime.value.split(':').map(Number);
   let currentMinutes = startHour * 60 + startMinute;
 
-  // Calculate time interval between stops
-  const timeInterval = selectedStops.value.length > 1 
-    ? totalDuration.value / (selectedStops.value.length - 1)
-    : 0;
+  if (timeMode.value === "even") {
+    // Even distribution mode
+    const timeInterval = selectedStops.value.length > 1 
+      ? totalDuration.value / (selectedStops.value.length - 1)
+      : 0;
 
-  selectedStops.value.forEach((stop, index) => {
-    const hours = Math.floor(currentMinutes / 60);
-    const minutes = Math.floor(currentMinutes % 60);
-    const seconds = Math.floor((currentMinutes % 1) * 60);
-    
-    const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    selectedStops.value.forEach((stop, index) => {
+      const hours = Math.floor(currentMinutes / 60);
+      const minutes = Math.floor(currentMinutes % 60);
+      const seconds = Math.floor((currentMinutes % 1) * 60);
+      
+      const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-    generatedStopTimes.value.push({
-      trip_id: tripId.value,
-      arrival_time: timeString,
-      departure_time: timeString,
-      stop_id: stop.stop_id,
-      stop_name: stop.stop_name,
-      stop_sequence: index,
-      pickup_type: 0,
-      drop_off_type: 0,
-      timepoint: 0
+      generatedStopTimes.value.push({
+        trip_id: tripId.value,
+        arrival_time: timeString,
+        departure_time: timeString,
+        stop_id: stop.stop_id,
+        stop_name: stop.stop_name,
+        stop_sequence: index,
+        pickup_type: 0,
+        drop_off_type: 0,
+        timepoint: 0
+      });
+
+      // Add time interval for next stop
+      currentMinutes += timeInterval;
     });
+  } else {
+    // Custom time gaps mode
+    selectedStops.value.forEach((stop, index) => {
+      const hours = Math.floor(currentMinutes / 60);
+      const minutes = Math.floor(currentMinutes % 60);
+      const seconds = 0;
+      
+      const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
-    // Add time interval for next stop
-    currentMinutes += timeInterval;
-  });
+      generatedStopTimes.value.push({
+        trip_id: tripId.value,
+        arrival_time: timeString,
+        departure_time: timeString,
+        stop_id: stop.stop_id,
+        stop_name: stop.stop_name,
+        stop_sequence: index,
+        pickup_type: 0,
+        drop_off_type: 0,
+        timepoint: 0
+      });
+
+      // Add custom time gap to next stop
+      currentMinutes += stop.timeGapAfter || 0;
+    });
+  }
 }
 
 function downloadStopTimes() {
@@ -553,4 +696,3 @@ function downloadFile(content, filename) {
 <style scoped>
 /* Additional custom styles if needed */
 </style>
-

@@ -367,6 +367,8 @@ function processCSV(csvText) {
     }
 
     let startIdx = 0;
+    let processedAllTimes = false;
+    
     while (startIdx < times.length - 1) {
       let endIdx = startIdx + 1;
       let currentHeadway = times[endIdx] - times[startIdx];
@@ -390,10 +392,16 @@ function processCSV(csvText) {
 
       // Move to the next unmerged time
       startIdx = endIdx + 1;
+      
+      // Check if we've processed all times
+      if (startIdx >= times.length - 1) {
+        processedAllTimes = true;
+      }
     }
 
-    // Add wrap-around entry from last time to first time of next day
-    if (times.length > 0) {
+    // Only add wrap-around entry if there are unprocessed times or single remaining time
+    // This ensures we don't duplicate when all times are already in frequency entries
+    if (!processedAllTimes && times.length > 0) {
       const lastTime = times[times.length - 1];
       const firstTime = times[0];
       const nextDayFirstTime = firstTime + 86400; // Add 24 hours

@@ -12,40 +12,39 @@
             </p>
           </div>
           
-<a
-  href="/gtfs2"
-  class="
-    mt-1 ml-4 flex-shrink-0
-    bg-gradient-to-r from-blue-600 to-indigo-600
-    text-white
-    px-6 py-3
-    rounded-lg
-    font-semibold
-    hover:from-blue-700 hover:to-indigo-700
-    transition-all
-    shadow-md hover:shadow-lg
-    flex items-center justify-center space-x-2
-    focus:outline-none
-    focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
-  "
->
-  <svg
-    class="w-5 h-5 text-white"
-    fill="none"
-    stroke="currentColor"
-    viewBox="0 0 24 24"
-  >
-    <path
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      stroke-width="2"
-      d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"
-    />
-  </svg>
-  <span>GTFS Shapes & Stops Generator</span>
-</a>
-
-          </div>
+          <a
+            href="/gtfs2"
+            class="
+              mt-1 ml-4 flex-shrink-0
+              bg-gradient-to-r from-blue-600 to-indigo-600
+              text-white
+              px-6 py-3
+              rounded-lg
+              font-semibold
+              hover:from-blue-700 hover:to-indigo-700
+              transition-all
+              shadow-md hover:shadow-lg
+              flex items-center justify-center space-x-2
+              focus:outline-none
+              focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500
+            "
+          >
+            <svg
+              class="w-5 h-5 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>GTFS Shapes & Stops Generator</span>
+          </a>
+        </div>
       </div>
 
       <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -306,7 +305,7 @@ function convertTo24Hour(timeStr) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-// Convert seconds since midnight to HH:MM:SS string
+// Convert seconds since midnight to HH:MM:SS string (24-hour format)
 function secondsToHHMMSS(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -391,6 +390,22 @@ function processCSV(csvText) {
 
       // Move to the next unmerged time
       startIdx = endIdx + 1;
+    }
+
+    // Add wrap-around entry from last time to first time of next day
+    if (times.length > 0) {
+      const lastTime = times[times.length - 1];
+      const firstTime = times[0];
+      const nextDayFirstTime = firstTime + 86400; // Add 24 hours
+      const wrapHeadway = nextDayFirstTime - lastTime;
+
+      frequencies.value.push({
+        trip_id,
+        start_time: secondsToHHMMSS(lastTime),
+        end_time: secondsToHHMMSS(nextDayFirstTime),
+        headway_secs: wrapHeadway,
+        exact_times: globalExactTimes.value,
+      });
     }
   }
 }

@@ -439,7 +439,7 @@ function downloadFrequencies() {
     frequencies.value
       .map(
         (r) =>
-          `${r.trip_id},${r.start_time},${r.end_time},${r.headway_secs},${globalExactTimes.value}`
+          `${r.trip_id},${formatTimeDisplay(r.start_time)},${formatTimeDisplay(r.end_time)},${r.headway_secs},${globalExactTimes.value}`
       )
       .join("\n");
 

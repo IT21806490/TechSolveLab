@@ -313,24 +313,20 @@ function secondsToHHMMSS(seconds) {
   return [h, m, s].map((x) => String(x).padStart(2, "0")).join(":");
 }
 
-// Format time for display: converts times beyond 24 hours to 12-hour AM/PM format
+// Format time for display: converts times beyond 24 hours to valid 24-hour format
 function formatTimeDisplay(timeStr) {
   const parts = timeStr.split(":");
   let hours = parseInt(parts[0], 10);
   const minutes = parts[1];
   const seconds = parts[2];
   
-  // If hours are 24 or more, wrap to valid time
+  // If hours are 24 or more, wrap to valid 24-hour time
   if (hours >= 24) {
     hours = hours % 24;
   }
   
-  // Convert to 12-hour format with AM/PM
-  const period = hours >= 12 ? "PM" : "AM";
-  let displayHours = hours % 12;
-  if (displayHours === 0) displayHours = 12;
-  
-  return `${displayHours}:${minutes}:${seconds} ${period}`;
+  // Return in 24-hour format
+  return `${String(hours).padStart(2, '0')}:${minutes}:${seconds}`;
 }
 
 function handleFile(event) {

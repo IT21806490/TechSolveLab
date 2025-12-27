@@ -154,14 +154,37 @@
                 <!-- New Shape ID Input -->
                 <div class="mt-3">
                   <label class="block text-sm font-medium text-blue-900 mb-1">
-                    New Shape ID (optional - to create modified shape)
+                    New Shape ID (required to create modified shape)
                   </label>
                   <input
                     type="text"
                     v-model="newShapeId"
+                    @input="clearGeneratedShapes"
                     class="w-full px-3 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                    placeholder="Enter new shape ID or leave blank to use original"
+                    placeholder="Enter new shape ID"
                   />
+                  <p class="text-xs text-blue-600 mt-1">
+                    Changing this will clear the preview. Click "Generate Modified Shape" to update.
+                  </p>
+                </div>
+
+                <!-- Generate Button -->
+                <div class="mt-4">
+                  <button
+                    @click="generateModifiedShape"
+                    :disabled="!newShapeId.trim()"
+                    :class="[
+                      'px-6 py-3 rounded-lg font-semibold transition-all shadow-md flex items-center space-x-2',
+                      newShapeId.trim() 
+                        ? 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-lg' 
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    ]"
+                  >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span>Generate Modified Shape</span>
+                  </button>
                 </div>
               </div>
               <button
@@ -171,6 +194,95 @@
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                 </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Shape Preview -->
+          <div v-if="generatedShapesData.length > 0" class="mt-6">
+            <div class="flex justify-between items-center mb-3">
+              <h3 class="text-lg font-semibold text-gray-800">
+                Modified Shape Preview
+                <span class="text-sm font-normal text-gray-600 ml-2">
+                  (Showing first 5 of {{ generatedShapesData.length }} rows)
+                </span>
+              </h3>
+            </div>
+
+            <!-- Preview Table -->
+            <div class="overflow-x-auto rounded-lg border border-gray-200 mb-4">
+              <table class="w-full">
+                <thead class="bg-blue-50">
+                  <tr>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Shape ID
+                    </th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Latitude
+                    </th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Longitude
+                    </th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Sequence
+                    </th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      Distance Traveled
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                  <tr 
+                    v-for="(shape, i) in generatedShapesData.slice(0, 5)" 
+                    :key="i" 
+                    class="hover:bg-gray-50 transition-colors"
+                  >
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">
+                      {{ shape.shape_id }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-700 font-mono">
+                      {{ shape.shape_pt_lat }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-700 font-mono">
+                      {{ shape.shape_pt_lon }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-700">
+                      {{ shape.shape_pt_sequence }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-700">
+                      {{ shape.shape_dist_traveled || '-' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="bg-green-50 border-l-4 border-green-500 rounded-lg p-4 mb-4">
+              <div class="flex items-start">
+                <svg class="w-5 h-5 text-green-500 mr-3 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                </svg>
+                <div class="flex-1">
+                  <p class="text-green-700 text-sm font-medium">
+                    Modified shape is ready to download!
+                  </p>
+                  <p class="text-green-600 text-xs mt-1">
+                    Original shape ID "{{ selectedShapeId }}" has been changed to "{{ newShapeId }}" across all {{ generatedShapesData.length }} points.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Download Button -->
+            <div class="flex justify-center">
+              <button
+                @click="downloadShapes"
+                class="bg-green-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-green-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
+              >
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                <span>Download shapes.txt ({{ generatedShapesData.length }} rows)</span>
               </button>
             </div>
           </div>
@@ -472,7 +584,7 @@
       <div v-if="selectedStops.length > 0 && tripId && startTime && (timeMode === 'custom' || totalDuration)" class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold text-gray-800">
-            4. Preview and Generate
+            4. Preview and Generate Stop Times
           </h2>
           <button
             @click="generateStopTimes"
@@ -540,7 +652,7 @@
           </div>
         </div>
 
-        <div v-if="generatedStopTimes.length > 0" class="mt-6 flex flex-col sm:flex-row justify-center gap-4">
+        <div v-if="generatedStopTimes.length > 0" class="mt-6 flex justify-center">
           <button
             @click="downloadStopTimes"
             class="bg-green-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-green-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
@@ -549,17 +661,6 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
             </svg>
             <span>Download stop_times.txt</span>
-          </button>
-
-          <button
-            v-if="selectedShapeId && generatedShapesData.length > 0"
-            @click="downloadShapes"
-            class="bg-blue-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
-          >
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-            </svg>
-            <span>Download shapes.txt</span>
           </button>
         </div>
       </div>
@@ -738,6 +839,34 @@ function clearSelectedShape() {
   selectedShapePoints.value = [];
   newShapeId.value = "";
   generatedShapesData.value = [];
+}
+
+function clearGeneratedShapes() {
+  // Clear the preview when user changes the new shape ID
+  generatedShapesData.value = [];
+}
+
+function generateModifiedShape() {
+  if (!newShapeId.value.trim()) {
+    alert("Please enter a new shape ID");
+    return;
+  }
+
+  if (!selectedShapeId.value || selectedShapePoints.value.length === 0) {
+    alert("Please select a shape first");
+    return;
+  }
+
+  // Generate the modified shapes data
+  generatedShapesData.value = selectedShapePoints.value.map(point => ({
+    shape_id: newShapeId.value.trim(),
+    shape_pt_lat: point.shape_pt_lat,
+    shape_pt_lon: point.shape_pt_lon,
+    shape_pt_sequence: point.shape_pt_sequence,
+    shape_dist_traveled: point.shape_dist_traveled
+  }));
+
+  console.log(`Generated ${generatedShapesData.value.length} shape points with new ID: ${newShapeId.value}`);
 }
 
 function parseStopsFile(content) {
@@ -926,19 +1055,6 @@ function generateStopTimes() {
       currentMinutes += stop.timeGapAfter || 0;
     });
   }
-
-  // Generate shapes data if shape is selected
-  if (selectedShapeId.value && selectedShapePoints.value.length > 0) {
-    const finalShapeId = newShapeId.value || selectedShapeId.value;
-    
-    generatedShapesData.value = selectedShapePoints.value.map(point => ({
-      shape_id: finalShapeId,
-      shape_pt_lat: point.shape_pt_lat,
-      shape_pt_lon: point.shape_pt_lon,
-      shape_pt_sequence: point.shape_pt_sequence,
-      shape_dist_traveled: point.shape_dist_traveled
-    }));
-  }
 }
 
 function downloadStopTimes() {
@@ -956,14 +1072,13 @@ function downloadStopTimes() {
 function downloadShapes() {
   if (generatedShapesData.value.length === 0) return;
 
-  const finalShapeId = newShapeId.value || selectedShapeId.value;
   const csvContent =
     "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence,shape_dist_traveled\n" +
     generatedShapesData.value
       .map(sp => `${sp.shape_id},${sp.shape_pt_lat},${sp.shape_pt_lon},${sp.shape_pt_sequence},${sp.shape_dist_traveled}`)
       .join("\n");
 
-  downloadFile(csvContent, `shapes_${finalShapeId.replace(/\//g, '_')}.txt`);
+  downloadFile(csvContent, `shapes_${newShapeId.value.replace(/\//g, '_')}.txt`);
 }
 
 function downloadFile(content, filename) {

@@ -398,14 +398,40 @@
                   </p>
                 </div>
 
+                <!-- Time Configuration for Edit Mode -->
+                <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-orange-900 mb-1">
+                      Start Time
+                    </label>
+                    <input
+                      type="time"
+                      v-model="editStartTime"
+                      class="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-orange-900 mb-1">
+                      Total Trip Duration (minutes)
+                    </label>
+                    <input
+                      type="number"
+                      v-model.number="editTotalDuration"
+                      class="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                      placeholder="e.g., 120"
+                      min="1"
+                    />
+                  </div>
+                </div>
+
                 <!-- Load for Editing Button -->
                 <div class="mt-4">
                   <button
                     @click="loadTripForEditing"
-                    :disabled="!newTripId.trim()"
+                    :disabled="!newTripId.trim() || !editStartTime || !editTotalDuration"
                     :class="[
                       'px-6 py-3 rounded-lg font-semibold transition-all shadow-md flex items-center space-x-2',
-                      newTripId.trim() 
+                      (newTripId.trim() && editStartTime && editTotalDuration)
                         ? 'bg-orange-600 text-white hover:bg-orange-700 hover:shadow-lg' 
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     ]"
@@ -413,8 +439,11 @@
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                     </svg>
-                    <span>Load for Editing</span>
+                    <span>Load for Editing with Auto-Generated Times</span>
                   </button>
+                  <p class="text-xs text-orange-600 mt-2">
+                    Times will be automatically distributed evenly across all stops based on start time and duration.
+                  </p>
                 </div>
               </div>
               <button
@@ -970,6 +999,8 @@ const newTripId = ref("");
 const isLoadingStopTimes = ref(false);
 const isEditMode = ref(false);
 const editableStops = ref([]);
+const editStartTime = ref("08:00");
+const editTotalDuration = ref(120);
 
 // Create a Map for faster shape lookup
 const shapesByIdMap = ref(new Map());
@@ -1135,12 +1166,16 @@ function clearSelectedTrip() {
   isEditMode.value = false;
   editableStops.value = [];
   generatedStopTimes.value = [];
+  editStartTime.value = "08:00";
+  editTotalDuration.value = 120;
 }
 
 function clearEditMode() {
   isEditMode.value = false;
   editableStops.value = [];
   generatedStopTimes.value = [];
+  editStartTime.value = "08:00";
+  editTotalDuration.value = 120;
 }
 
 function loadTripForEditing() {
@@ -1149,21 +1184,48 @@ function loadTripForEditing() {
     return;
   }
 
+  if (!editStartTime.value || !editTotalDuration.value) {
+    alert("Please enter start time and total duration");
+    return;
+  }
+
   if (!selectedTripId.value || selectedTripStopTimes.value.length === 0) {
     alert("Please select a trip first");
     return;
   }
 
-  // Load stops into editable mode with stop names from stopsMap
-  editableStops.value = selectedTripStopTimes.value.map(st => ({
-    ...st,
-    stop_name: stopsMap.value.get(st.stop_id)?.stop_name || ''
-  }));
+  // Parse start time
+  const [startHour, startMinute] = editStartTime.value.split(':').map(Number);
+  let currentMinutes = startHour * 60 + startMinute;
+
+  // Calculate time interval for even distribution
+  const numStops = selectedTripStopTimes.value.length;
+  const timeInterval = numStops > 1 ? editTotalDuration.value / (numStops - 1) : 0;
+
+  // Load stops into editable mode with auto-generated times
+  editableStops.value = selectedTripStopTimes.value.map((st, index) => {
+    const hours = Math.floor(currentMinutes / 60);
+    const minutes = Math.floor(currentMinutes % 60);
+    const seconds = Math.floor((currentMinutes % 1) * 60);
+    
+    const timeString = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    // Add time interval for next stop
+    currentMinutes += timeInterval;
+
+    return {
+      ...st,
+      arrival_time: timeString,
+      departure_time: timeString,
+      stop_name: stopsMap.value.get(st.stop_id)?.stop_name || '',
+      stop_sequence: index.toString()
+    };
+  });
   
   isEditMode.value = true;
   generatedStopTimes.value = [];
 
-  console.log(`Loaded ${editableStops.value.length} stops for editing with new trip ID: ${newTripId.value}`);
+  console.log(`Loaded ${editableStops.value.length} stops for editing with auto-generated times`);
 }
 
 function moveUpEditable(index) {
@@ -1203,6 +1265,8 @@ function cancelEditMode() {
   isEditMode.value = false;
   editableStops.value = [];
   generatedStopTimes.value = [];
+  editStartTime.value = "08:00";
+  editTotalDuration.value = 120;
 }
 
 function generateFromEditedStops() {

@@ -92,11 +92,16 @@
         <div v-if="shapesFileName" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <div class="flex items-center justify-between">
             <div class="flex items-center">
-              <svg class="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <svg v-if="!isLoadingShapes" class="w-5 h-5 text-blue-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
               </svg>
+              <svg v-else class="animate-spin w-5 h-5 text-blue-600 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
               <span class="text-blue-800 font-medium">{{ shapesFileName }}</span>
-              <span class="ml-3 text-sm text-blue-600">({{ uniqueShapeIds.length }} unique shape IDs)</span>
+              <span v-if="!isLoadingShapes" class="ml-3 text-sm text-blue-600">({{ uniqueShapeIds.length }} unique shape IDs)</span>
+              <span v-else class="ml-3 text-sm text-blue-600">Loading...</span>
             </div>
           </div>
         </div>
@@ -600,6 +605,10 @@ const selectedShapePoints = ref([]);
 const newShapeId = ref("");
 const generatedShapesData = ref([]);
 const shapesFileInputRef = ref(null);
+const isLoadingShapes = ref(false);
+
+// Create a Map for faster shape lookup
+const shapesByIdMap = ref(new Map());
 
 const totalCalculatedTime = computed(() => {
   if (timeMode.value !== "custom") return 0;
@@ -623,11 +632,16 @@ function handleShapesFile(event) {
   const file = event.target.files[0];
   if (!file) return;
 
+  isLoadingShapes.value = true;
   shapesFileName.value = file.name;
   
   const reader = new FileReader();
   reader.onload = (e) => {
-    parseShapesFile(e.target.result);
+    // Use setTimeout to allow UI to update
+    setTimeout(() => {
+      parseShapesFile(e.target.result);
+      isLoadingShapes.value = false;
+    }, 0);
   };
   reader.readAsText(file);
 }
@@ -655,8 +669,8 @@ function parseShapesFile(content) {
     return;
   }
 
-  // Parse data rows
-  allShapes.value = [];
+  // Use Map for faster lookups
+  const shapesMap = new Map();
   const shapeIdsSet = new Set();
   
   for (let i = 1; i < lines.length; i++) {
@@ -665,19 +679,33 @@ function parseShapesFile(content) {
 
     const parts = parseCSVLine(line);
     
+    const shapeId = parts[shapeIdIndex]?.trim() || '';
     const shapePoint = {
-      shape_id: parts[shapeIdIndex]?.trim() || '',
+      shape_id: shapeId,
       shape_pt_lat: parts[shapePtLatIndex]?.trim() || '',
       shape_pt_lon: parts[shapePtLonIndex]?.trim() || '',
       shape_pt_sequence: parts[shapePtSequenceIndex]?.trim() || '',
       shape_dist_traveled: shapeDistTraveledIndex !== -1 ? parts[shapeDistTraveledIndex]?.trim() || '' : ''
     };
     
-    allShapes.value.push(shapePoint);
-    shapeIdsSet.add(shapePoint.shape_id);
+    // Group by shape_id using Map for O(1) lookup
+    if (!shapesMap.has(shapeId)) {
+      shapesMap.set(shapeId, []);
+    }
+    shapesMap.get(shapeId).push(shapePoint);
+    shapeIdsSet.add(shapeId);
   }
 
+  // Sort each shape's points once during parsing
+  shapesMap.forEach((points, shapeId) => {
+    points.sort((a, b) => parseInt(a.shape_pt_sequence) - parseInt(b.shape_pt_sequence));
+  });
+
+  // Store in ref for fast access
+  shapesByIdMap.value = shapesMap;
   uniqueShapeIds.value = Array.from(shapeIdsSet).sort();
+  
+  console.log(`Loaded ${uniqueShapeIds.value.length} shape IDs with ${lines.length - 1} total points`);
 }
 
 function filterShapes() {
@@ -687,6 +715,7 @@ function filterShapes() {
   }
 
   const query = shapeSearchQuery.value.toLowerCase();
+  // Limit results immediately for better performance
   filteredShapeIds.value = uniqueShapeIds.value
     .filter(shapeId => shapeId.toLowerCase().includes(query))
     .slice(0, 20);
@@ -694,9 +723,9 @@ function filterShapes() {
 
 function selectShapeId(shapeId) {
   selectedShapeId.value = shapeId;
-  selectedShapePoints.value = allShapes.value
-    .filter(point => point.shape_id === shapeId)
-    .sort((a, b) => parseInt(a.shape_pt_sequence) - parseInt(b.shape_pt_sequence));
+  
+  // Use the pre-sorted points from Map - instant lookup!
+  selectedShapePoints.value = shapesByIdMap.value.get(shapeId) || [];
   
   shapeSearchQuery.value = "";
   filteredShapeIds.value = [];

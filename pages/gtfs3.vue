@@ -1629,7 +1629,18 @@ function downloadShapes() {
   const csvContent =
     "shape_id,shape_pt_lat,shape_pt_lon,shape_pt_sequence,shape_dist_traveled\n" +
     generatedShapesData.value
-      .map(sp => `${sp.shape_id},${sp.shape_pt_lat},${sp.shape_pt_lon},${sp.shape_pt_sequence},${sp.shape_dist_traveled}`)
+      .map(sp => {
+        // Build the base row
+        const baseRow = `${sp.shape_id},${sp.shape_pt_lat},${sp.shape_pt_lon},${sp.shape_pt_sequence}`;
+        
+        // Only add comma and value if shape_dist_traveled exists and is not empty
+        if (sp.shape_dist_traveled && sp.shape_dist_traveled.trim() !== '') {
+          return `${baseRow},${sp.shape_dist_traveled}`;
+        } else {
+          // No trailing comma when field is empty
+          return baseRow;
+        }
+      })
       .join("\n");
 
   downloadFile(csvContent, `shapes_${newShapeId.value.replace(/\//g, '_')}.txt`);

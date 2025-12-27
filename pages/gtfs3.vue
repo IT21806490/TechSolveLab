@@ -6,10 +6,10 @@
         <div class="flex justify-between items-start flex-wrap gap-4">
           <div>
             <h1 class="text-3xl font-bold text-gray-800 mb-2">
-              ⏱️ GTFS Stop Times Generator
+              ⏱️ GTFS Stop Times Generator & Editor
             </h1>
             <p class="text-gray-600">
-              Upload stops.txt and shapes.txt to generate stop_times.txt and modified shapes.txt
+              Upload stops.txt and shapes.txt to generate stop_times.txt OR upload existing stop_times.txt to edit
             </p>
           </div>
         </div>
@@ -289,8 +289,149 @@
         </div>
       </div>
 
-      <!-- Step 2: Configure Trip -->
-      <div v-if="allStops.length > 0" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <!-- Step 1c: Upload stop_times.txt (Optional - for editing) -->
+      <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+          1c. Upload stop_times.txt File (Optional - for editing existing trips)
+        </h2>
+        
+        <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-orange-500 transition-colors">
+          <input
+            type="file"
+            accept=".txt,.csv"
+            @change="handleStopTimesFile"
+            id="stopTimesFileInput"
+            class="hidden"
+          />
+          <label
+            for="stopTimesFileInput"
+            class="cursor-pointer flex flex-col items-center"
+          >
+            <svg class="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <span class="text-lg font-medium text-gray-700 mb-1">
+              Click to upload stop_times.txt
+            </span>
+            <span class="text-sm text-gray-500">
+              CSV format with trip_id, arrival_time, departure_time, stop_id, stop_sequence
+            </span>
+          </label>
+        </div>
+        
+        <div v-if="stopTimesFileName" class="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <svg v-if="!isLoadingStopTimes" class="w-5 h-5 text-orange-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+              </svg>
+              <svg v-else class="animate-spin w-5 h-5 text-orange-600 mr-2" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span class="text-orange-800 font-medium">{{ stopTimesFileName }}</span>
+              <span v-if="!isLoadingStopTimes" class="ml-3 text-sm text-orange-600">({{ uniqueTripIds.length }} unique trip IDs)</span>
+              <span v-else class="ml-3 text-sm text-orange-600">Loading...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trip ID Search and Selection -->
+        <div v-if="uniqueTripIds.length > 0" class="mt-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            Search and Select Trip ID
+          </label>
+          <div class="relative mb-4">
+            <input
+              type="text"
+              v-model="tripSearchQuery"
+              @input="filterTripIds"
+              class="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              placeholder="Type to search trip IDs..."
+            />
+            <svg class="w-5 h-5 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+
+          <!-- Trip ID Search Results -->
+          <div v-if="tripSearchQuery && filteredTripIds.length > 0" class="mb-4 max-h-48 overflow-y-auto border border-gray-200 rounded-lg">
+            <div
+              v-for="tripIdItem in filteredTripIds"
+              :key="tripIdItem"
+              @click="selectTripId(tripIdItem)"
+              class="p-3 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-b-0 transition-colors"
+            >
+              <div class="flex justify-between items-center">
+                <div class="font-medium text-gray-900">{{ tripIdItem }}</div>
+                <button class="text-orange-600 hover:text-orange-800">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Selected Trip Info -->
+          <div v-if="selectedTripId" class="p-4 bg-orange-100 border-l-4 border-orange-500 rounded-lg">
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <h4 class="font-semibold text-orange-900 mb-1">Selected Trip ID</h4>
+                <p class="text-orange-800 font-mono">{{ selectedTripId }}</p>
+                <p class="text-sm text-orange-700 mt-1">{{ selectedTripStopTimes.length }} stops loaded</p>
+                
+                <!-- New Trip ID Input -->
+                <div class="mt-3">
+                  <label class="block text-sm font-medium text-orange-900 mb-1">
+                    New Trip ID (required to create modified stop_times)
+                  </label>
+                  <input
+                    type="text"
+                    v-model="newTripId"
+                    @input="clearEditMode"
+                    class="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                    placeholder="Enter new trip ID"
+                  />
+                  <p class="text-xs text-orange-600 mt-1">
+                    Changing this will clear the edit mode. Click "Load for Editing" to start.
+                  </p>
+                </div>
+
+                <!-- Load for Editing Button -->
+                <div class="mt-4">
+                  <button
+                    @click="loadTripForEditing"
+                    :disabled="!newTripId.trim()"
+                    :class="[
+                      'px-6 py-3 rounded-lg font-semibold transition-all shadow-md flex items-center space-x-2',
+                      newTripId.trim() 
+                        ? 'bg-orange-600 text-white hover:bg-orange-700 hover:shadow-lg' 
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    ]"
+                  >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    <span>Load for Editing</span>
+                  </button>
+                </div>
+              </div>
+              <button
+                @click="clearSelectedTrip"
+                class="ml-4 text-orange-700 hover:text-orange-900"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Configure Trip (Only show if NOT in edit mode) -->
+      <div v-if="allStops.length > 0 && !isEditMode" class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           2. Configure Trip Details
         </h2>
@@ -432,8 +573,8 @@
         </div>
       </div>
 
-      <!-- Step 3: Search and Select Stops -->
-      <div v-if="allStops.length > 0" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <!-- Step 3: Search and Select Stops (Only if NOT in edit mode) -->
+      <div v-if="allStops.length > 0 && !isEditMode" class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">
           3. Search and Add Stops for This Trip
         </h2>
@@ -580,13 +721,122 @@
         </div>
       </div>
 
+      <!-- Step 3b: Edit Mode - Edit Stop Times -->
+      <div v-if="isEditMode && editableStops.length > 0" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-xl font-semibold text-gray-800">
+            3. Edit Stop Times
+            <span class="text-sm font-normal text-gray-600 ml-2">
+              (Trip: {{ newTripId }})
+            </span>
+          </h2>
+          <button
+            @click="cancelEditMode"
+            class="text-sm text-red-600 hover:text-red-800 font-medium flex items-center space-x-1"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+            <span>Cancel Edit Mode</span>
+          </button>
+        </div>
+
+        <div class="space-y-2">
+          <div
+            v-for="(stop, index) in editableStops"
+            :key="index"
+            class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
+          >
+            <div class="flex items-center space-x-3 flex-1">
+              <div class="flex items-center justify-center w-8 h-8 bg-orange-100 text-orange-600 rounded-full font-semibold text-sm">
+                {{ stop.stop_sequence }}
+              </div>
+              <div class="flex-1">
+                <div class="font-medium text-gray-900">{{ stop.stop_name || stop.stop_id }}</div>
+                <div class="text-sm text-gray-500">{{ stop.stop_id }}</div>
+              </div>
+            </div>
+            
+            <!-- Time Inputs -->
+            <div class="flex items-center space-x-3 mr-4">
+              <div class="flex flex-col">
+                <label class="text-xs text-gray-500 mb-1">Arrival</label>
+                <input
+                  type="time"
+                  v-model="stop.arrival_time"
+                  step="1"
+                  class="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+              <div class="flex flex-col">
+                <label class="text-xs text-gray-500 mb-1">Departure</label>
+                <input
+                  type="time"
+                  v-model="stop.departure_time"
+                  step="1"
+                  class="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+              <button
+                @click="moveUpEditable(index)"
+                :disabled="index === 0"
+                :class="[
+                  'p-1 rounded',
+                  index === 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-200'
+                ]"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                </svg>
+              </button>
+              <button
+                @click="moveDownEditable(index)"
+                :disabled="index === editableStops.length - 1"
+                :class="[
+                  'p-1 rounded',
+                  index === editableStops.length - 1 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-200'
+                ]"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+              </button>
+              <button
+                @click="removeEditableStop(index)"
+                class="p-1 text-red-600 hover:bg-red-50 rounded"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex justify-center">
+          <button
+            @click="generateFromEditedStops"
+            class="bg-orange-600 text-white px-8 py-4 rounded-lg font-semibold hover:bg-orange-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>Generate Modified Stop Times</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Step 4: Generate and Preview -->
-      <div v-if="selectedStops.length > 0 && tripId && startTime && (timeMode === 'custom' || totalDuration)" class="bg-white rounded-lg shadow-lg p-6 mb-6">
+      <div v-if="(selectedStops.length > 0 && tripId && startTime && (timeMode === 'custom' || totalDuration) && !isEditMode) || (isEditMode && generatedStopTimes.length > 0)" class="bg-white rounded-lg shadow-lg p-6 mb-6">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold text-gray-800">
             4. Preview and Generate Stop Times
           </h2>
           <button
+            v-if="!isEditMode"
             @click="generateStopTimes"
             class="bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 transition-all shadow-md hover:shadow-lg flex items-center space-x-2"
           >
@@ -708,8 +958,27 @@ const generatedShapesData = ref([]);
 const shapesFileInputRef = ref(null);
 const isLoadingShapes = ref(false);
 
+// Stop Times editing state
+const stopTimesFileName = ref("");
+const allStopTimes = ref([]);
+const uniqueTripIds = ref([]);
+const filteredTripIds = ref([]);
+const tripSearchQuery = ref("");
+const selectedTripId = ref("");
+const selectedTripStopTimes = ref([]);
+const newTripId = ref("");
+const isLoadingStopTimes = ref(false);
+const isEditMode = ref(false);
+const editableStops = ref([]);
+
 // Create a Map for faster shape lookup
 const shapesByIdMap = ref(new Map());
+
+// Create a Map for faster stop times lookup by trip_id
+const stopTimesByTripIdMap = ref(new Map());
+
+// Create a Map for stop name lookup
+const stopsMap = ref(new Map());
 
 const totalCalculatedTime = computed(() => {
   if (timeMode.value !== "custom") return 0;
@@ -745,6 +1014,216 @@ function handleShapesFile(event) {
     }, 0);
   };
   reader.readAsText(file);
+}
+
+function handleStopTimesFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  isLoadingStopTimes.value = true;
+  stopTimesFileName.value = file.name;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    setTimeout(() => {
+      parseStopTimesFile(e.target.result);
+      isLoadingStopTimes.value = false;
+    }, 0);
+  };
+  reader.readAsText(file);
+}
+
+function parseStopTimesFile(content) {
+  const lines = content.trim().split('\n');
+  
+  if (lines.length < 2) {
+    alert("Invalid stop_times.txt file");
+    return;
+  }
+
+  // Parse header
+  const headers = lines[0].split(',').map(h => h.trim());
+  
+  // Find column indices
+  const tripIdIndex = headers.indexOf('trip_id');
+  const arrivalTimeIndex = headers.indexOf('arrival_time');
+  const departureTimeIndex = headers.indexOf('departure_time');
+  const stopIdIndex = headers.indexOf('stop_id');
+  const stopSequenceIndex = headers.indexOf('stop_sequence');
+  const pickupTypeIndex = headers.indexOf('pickup_type');
+  const dropOffTypeIndex = headers.indexOf('drop_off_type');
+  const timepointIndex = headers.indexOf('timepoint');
+
+  if (tripIdIndex === -1 || arrivalTimeIndex === -1 || departureTimeIndex === -1 || 
+      stopIdIndex === -1 || stopSequenceIndex === -1) {
+    alert("stop_times.txt must contain trip_id, arrival_time, departure_time, stop_id, and stop_sequence columns");
+    return;
+  }
+
+  // Use Map for faster lookups
+  const stopTimesMap = new Map();
+  const tripIdsSet = new Set();
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    const parts = parseCSVLine(line);
+    
+    const tripIdValue = parts[tripIdIndex]?.trim() || '';
+    const stopTime = {
+      trip_id: tripIdValue,
+      arrival_time: parts[arrivalTimeIndex]?.trim() || '',
+      departure_time: parts[departureTimeIndex]?.trim() || '',
+      stop_id: parts[stopIdIndex]?.trim() || '',
+      stop_sequence: parts[stopSequenceIndex]?.trim() || '',
+      pickup_type: pickupTypeIndex !== -1 ? parts[pickupTypeIndex]?.trim() || '0' : '0',
+      drop_off_type: dropOffTypeIndex !== -1 ? parts[dropOffTypeIndex]?.trim() || '0' : '0',
+      timepoint: timepointIndex !== -1 ? parts[timepointIndex]?.trim() || '0' : '0'
+    };
+    
+    // Group by trip_id using Map for O(1) lookup
+    if (!stopTimesMap.has(tripIdValue)) {
+      stopTimesMap.set(tripIdValue, []);
+    }
+    stopTimesMap.get(tripIdValue).push(stopTime);
+    tripIdsSet.add(tripIdValue);
+  }
+
+  // Sort each trip's stop times by sequence
+  stopTimesMap.forEach((stopTimes, tripId) => {
+    stopTimes.sort((a, b) => parseInt(a.stop_sequence) - parseInt(b.stop_sequence));
+  });
+
+  // Store in ref for fast access
+  stopTimesByTripIdMap.value = stopTimesMap;
+  uniqueTripIds.value = Array.from(tripIdsSet).sort();
+  
+  console.log(`Loaded ${uniqueTripIds.value.length} trip IDs with ${lines.length - 1} total stop times`);
+}
+
+function filterTripIds() {
+  if (!tripSearchQuery.value) {
+    filteredTripIds.value = [];
+    return;
+  }
+
+  const query = tripSearchQuery.value.toLowerCase();
+  filteredTripIds.value = uniqueTripIds.value
+    .filter(tripId => tripId.toLowerCase().includes(query))
+    .slice(0, 20);
+}
+
+function selectTripId(tripIdValue) {
+  selectedTripId.value = tripIdValue;
+  
+  // Use the pre-sorted stop times from Map - instant lookup!
+  selectedTripStopTimes.value = stopTimesByTripIdMap.value.get(tripIdValue) || [];
+  
+  tripSearchQuery.value = "";
+  filteredTripIds.value = [];
+  newTripId.value = "";
+  isEditMode.value = false;
+  editableStops.value = [];
+  generatedStopTimes.value = [];
+}
+
+function clearSelectedTrip() {
+  selectedTripId.value = "";
+  selectedTripStopTimes.value = [];
+  newTripId.value = "";
+  isEditMode.value = false;
+  editableStops.value = [];
+  generatedStopTimes.value = [];
+}
+
+function clearEditMode() {
+  isEditMode.value = false;
+  editableStops.value = [];
+  generatedStopTimes.value = [];
+}
+
+function loadTripForEditing() {
+  if (!newTripId.value.trim()) {
+    alert("Please enter a new trip ID");
+    return;
+  }
+
+  if (!selectedTripId.value || selectedTripStopTimes.value.length === 0) {
+    alert("Please select a trip first");
+    return;
+  }
+
+  // Load stops into editable mode with stop names from stopsMap
+  editableStops.value = selectedTripStopTimes.value.map(st => ({
+    ...st,
+    stop_name: stopsMap.value.get(st.stop_id)?.stop_name || ''
+  }));
+  
+  isEditMode.value = true;
+  generatedStopTimes.value = [];
+
+  console.log(`Loaded ${editableStops.value.length} stops for editing with new trip ID: ${newTripId.value}`);
+}
+
+function moveUpEditable(index) {
+  if (index === 0) return;
+  const temp = editableStops.value[index];
+  editableStops.value[index] = editableStops.value[index - 1];
+  editableStops.value[index - 1] = temp;
+  
+  // Update stop sequences
+  editableStops.value.forEach((stop, i) => {
+    stop.stop_sequence = i.toString();
+  });
+}
+
+function moveDownEditable(index) {
+  if (index === editableStops.value.length - 1) return;
+  const temp = editableStops.value[index];
+  editableStops.value[index] = editableStops.value[index + 1];
+  editableStops.value[index + 1] = temp;
+  
+  // Update stop sequences
+  editableStops.value.forEach((stop, i) => {
+    stop.stop_sequence = i.toString();
+  });
+}
+
+function removeEditableStop(index) {
+  editableStops.value.splice(index, 1);
+  
+  // Update stop sequences
+  editableStops.value.forEach((stop, i) => {
+    stop.stop_sequence = i.toString();
+  });
+}
+
+function cancelEditMode() {
+  isEditMode.value = false;
+  editableStops.value = [];
+  generatedStopTimes.value = [];
+}
+
+function generateFromEditedStops() {
+  if (editableStops.value.length === 0) {
+    alert("No stops to generate");
+    return;
+  }
+
+  generatedStopTimes.value = editableStops.value.map((stop, index) => ({
+    trip_id: newTripId.value.trim(),
+    arrival_time: stop.arrival_time,
+    departure_time: stop.departure_time,
+    stop_id: stop.stop_id,
+    stop_name: stop.stop_name,
+    stop_sequence: index,
+    pickup_type: stop.pickup_type || 0,
+    drop_off_type: stop.drop_off_type || 0,
+    timepoint: stop.timepoint || 0
+  }));
+
+  console.log(`Generated ${generatedStopTimes.value.length} stop times from edited stops`);
 }
 
 function parseShapesFile(content) {
@@ -893,19 +1372,26 @@ function parseStopsFile(content) {
 
   // Parse data rows - use proper CSV parsing
   allStops.value = [];
+  const tempStopsMap = new Map();
+  
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
     const parts = parseCSVLine(line);
     
-    allStops.value.push({
+    const stop = {
       stop_id: parts[stopIdIndex]?.trim() || '',
       stop_name: parts[stopNameIndex]?.trim() || '',
       stop_lat: parts[stopLatIndex]?.trim() || '',
       stop_lon: parts[stopLonIndex]?.trim() || ''
-    });
+    };
+    
+    allStops.value.push(stop);
+    tempStopsMap.set(stop.stop_id, stop);
   }
+  
+  stopsMap.value = tempStopsMap;
 }
 
 // Helper function to parse CSV line properly
@@ -1066,7 +1552,11 @@ function downloadStopTimes() {
       .map(st => `${st.trip_id},${st.arrival_time},${st.departure_time},${st.stop_id},${st.stop_sequence},${st.pickup_type},${st.drop_off_type},${st.timepoint}`)
       .join("\n");
 
-  downloadFile(csvContent, `stop_times_${tripId.value.replace(/\//g, '_')}.txt`);
+  const filename = isEditMode.value 
+    ? `stop_times_${newTripId.value.replace(/\//g, '_')}.txt`
+    : `stop_times_${tripId.value.replace(/\//g, '_')}.txt`;
+
+  downloadFile(csvContent, filename);
 }
 
 function downloadShapes() {

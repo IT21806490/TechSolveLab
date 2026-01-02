@@ -479,11 +479,12 @@
   import { CandlestickController, CandlestickElement } from "chartjs-chart-financial";
   import "chartjs-adapter-date-fns";
 
+  // Register chart.js controllers and elements
   Chart.register(...registerables, CandlestickController, CandlestickElement);
 
+  // Symbols and market data
   const symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
-  const symbol = ref("BTCUSDT");
-
+  const symbol = ref("BTCUSDT"); // Default symbol
   const marketData = reactive({
     BTCUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
     ETHUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
@@ -532,7 +533,7 @@
 
   const totalTrades = computed(() => trades.value.filter(t => t.type === 'SELL').length);
 
-  // Technical Indicator Functions (EMA, RSI, ADX, etc.)
+  // Functions for technical indicators (EMA, RSI, ADX)
   function calcEMA(data, period) {
     if (data.length < period) return Array(data.length).fill(data[0]);
     const k = 2 / (period + 1);
@@ -572,7 +573,6 @@
   }
 
   // ==================== ENSEMBLE AI MODELS ====================
-  // Model 1: Polynomial Regression
   function polynomialRegression(closes, degree = 2) {
     const n = Math.min(closes.length, 60);
     const recent = closes.slice(-n);
@@ -598,157 +598,96 @@
     return pred * maxVal;
   }
 
-  // Model 2: Weighted Moving Average with momentum
-  function wmaWithMomentum(closes) {
-    const n = Math.min(closes.length, 30);
-    const recent = closes.slice(-n);
-    let sum = 0, weightSum = 0;
-    for (let i = 0; i < n; i++) {
-      const weight = (i + 1);
-      sum += recent[i] * weight;
-      weightSum += weight;
+  function ensembleAIPrediction(closes, highs, lows, volumes) {
+    const current = closes[closes.length - 1];
+    const polyPred = polynomialRegression(closes);
+    const wmaPred = wmaWithMomentum(closes);
+    const meanRevPred = meanReversionModel(closes);
+    const expPred = exponentialSmoothing(closes);
+    const rsi = calcRSI(closes);
+    const adx = calcADX(highs, lows, closes);
+    const avgVol = volumes.slice(-20).reduce((a, b) => a + b) / 20;
+    const currentVol = volumes[volumes.length - 1];
+    const volRatio = currentVol / avgVol;
+    let weights = { poly: 0.3, wma: 0.25, meanRev: 0.25, exp: 0.2 };
+    if (adx > 25) {
+      weights.poly = 0.4;
+      weights.wma = 0.35;
+      weights.meanRev = 0.15;
+      weights.exp = 0.1;
+    } else {
+      weights.poly = 0.2;
+      weights.wma = 0.2;
+      weights.meanRev = 0.4;
+      weights.exp = 0.2;
     }
-    const wma = sum / weightSum;
-    const momentum = (recent[n - 1] - recent[0]) / n;
-    return wma + momentum * 5;
+    const ensemblePred = polyPred * weights.poly + wmaPred * weights.wma + meanRevPred * weights.meanRev + expPred * weights.exp;
+    const avgConfidence = aiModels.value.reduce((sum, m) => sum + m.confidence, 0) / 4;
+    aiScore.value = Math.round(avgConfidence);
+    return { predicted: ensemblePred, change: (ensemblePred - current) / current, confidence: avgConfidence };
   }
 
-  // Model 3: Mean Reversion with volatility adjustment
-  function meanReversionModel(closes) {
-    const n = Math.min(closes.length, 50);
-    const recent = closes.slice(-n);
-    const mean = recent.reduce((a, b) => a + b) / n;
-    const variance = recent.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / n;
-    const stdDev = Math.sqrt(variance);
-    const current = recent[n - 1];
-    const zScore = (current - mean) / stdDev;
-    return mean + (current - mean) * 0.7 + (stdDev * 0.3 * (zScore > 0 ? 1 : -1));
-  }
-
-  // Model 4: Exponential Smoothing with trend
-  function exponentialSmoothing(closes, alpha = 0.3, beta = 0.1) {
-    const n = Math.min(closes.length, 40);
-    const recent = closes.slice(-n);
-    let level = recent[0];
-    let trend = 0;
-    for (let i = 1; i < n; i++) {
-      const diff = recent[i] - level;
-      trend = alpha * diff + (1 - alpha) * trend;
-      level = alpha * recent[i] + (1 - alpha) * (level + trend);
-    }
-    return level + trend;
-  }
-
-  // Generate predictions using ensemble of models
-  function aiPrediction(closes) {
-    const models = [polynomialRegression, wmaWithMomentum, meanReversionModel, exponentialSmoothing];
-    const predictions = models.map(model => model(closes));
-    return predictions.reduce((sum, val) => sum + val) / models.length;
-  }
-
-  // ==================== BINANCE API ====================
-  async function analyzeTimeframes() {
-    const timeframes = [
-      { name: '15m', interval: '15m', limit: 200 },
-      { name: '1h', interval: '1h', limit: 200 },
-      { name: '4h', interval: '4h', limit: 200 }
-    ];
-    mtfData.value = [];
-    let aligned = 0;
-
-    const promises = timeframes.map(async (tf) => {
-      try {
-        const symbolEncoded = encodeURIComponent(symbol.value); // Properly encode symbol
-        const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbolEncoded}&interval=${tf.interval}&limit=${tf.limit}`);
-        const klines = await res.json();
-        const closes = klines.map(k => parseFloat(k[4]));
-        const highs = klines.map(k => parseFloat(k[2]));
-        const lows = klines.map(k => parseFloat(k[3]));
-        const ema200 = calcEMA(closes, 200);
-        const rsi = calcRSI(closes);
-        const adx = calcADX(highs, lows, closes);
-        const trend = closes[closes.length - 1] > ema200[ema200.length - 1] ? 'UP' : 'DOWN';
-        marketData[symbol.value].timeframes[tf.interval] = trend;
-        if (trend === 'UP') aligned++;
-        return { name: tf.name, trend, rsi: Math.round(rsi), adx: Math.round(adx) };
-      } catch (e) {
-        console.error('Error during timeframe analysis:', e);
-        return { name: tf.name, trend: 'NEUTRAL', rsi: 50, adx: 0 };
-      }
+  // Watch for symbol changes and update data
+  watch(symbol, async (newSymbol) => {
+    console.log("Selected Symbol:", newSymbol);
+    updateTickers(newSymbol);
+    await nextTick(() => {
+      loadCandles(newSymbol);
     });
-
-    mtfData.value = await Promise.all(promises);
-    mtfAlignment.value = aligned;
-    return aligned;
-  }
-
-  // ==================== MAIN DATA FETCHING FUNCTION ====================
-  async function fetchEngine() {
-    try {
-      const symbolEncoded = encodeURIComponent(symbol.value); // Properly encode symbol
-      const cacheKey = `${symbolEncoded}_15m`;
-      const now = Date.now();
-      if (dataCache[cacheKey] && now - dataCache[cacheKey].time < 60000) {
-        processData(dataCache[cacheKey].data);
-        return;
-      }
-      const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbolEncoded}&interval=15m&limit=500`);
-      const klines = await res.json();
-      dataCache[cacheKey] = { data: klines, time: now };
-      processData(klines);
-    } catch (e) {
-      console.error("API Error:", e);
-    }
-  }
-
-  // ==================== TICKERS UPDATE FUNCTION ====================
-  async function updateTickers() {
-    try {
-      const promises = symbols.map(async (s) => {
-        const symbolEncoded = encodeURIComponent(s); // Ensure symbol is properly encoded
-        const r = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${symbolEncoded}`);
-        const d = await r.json();
-        marketData[s].price = parseFloat(d.lastPrice);
-        marketData[s].change = parseFloat(d.priceChangePercent);
-      });
-      await Promise.all(promises);
-
-      // Update current position P/L if we have one
-      if (currentPosition.value && candles.value.length > 0) {
-        const currentPrice = marketData[symbol.value].price;
-        const currentGrossPL = currentPrice - currentPosition.value.price;
-        const estimatedFees = (currentPosition.value.price + currentPrice) * feePercent;
-        const currentNetPL = currentGrossPL - estimatedFees;
-        currentPosition.value.currentPrice = currentPrice;
-        currentPosition.value.currentPL = currentNetPL;
-        currentPosition.value.currentPercent = (currentNetPL / currentPosition.value.price) * 100;
-
-        // Update peak if current price is higher
-        if (currentPrice > currentPosition.value.peak) {
-          currentPosition.value.peak = currentPrice;
-        }
-
-        // Update trailing take profit
-        currentPosition.value.takeProfit = currentPosition.value.peak * (1 - takeProfit.value);
-      }
-    } catch (e) {
-      console.error('Ticker error:', e);
-    }
-  }
-
-  // ==================== ON MOUNTED ====================
-  onMounted(async () => {
-    await updateTickers();
-    await fetchEngine();
-    setInterval(updateTickers, 10000);
-    setInterval(fetchEngine, 900000);
   });
 
-  // ==================== WATCHER FOR SYMBOL CHANGE ====================
-  watch(symbol, async () => {
-    dataCache = {}; // Clear cache for new symbol
-    await fetchEngine();
-    await analyzeTimeframes();
+  // Fetch latest market data for the selected symbol
+  async function updateTickers(symbol) {
+    try {
+      console.log("Fetching ticker data for:", symbol);
+      const symbolEncoded = encodeURIComponent(symbol);
+      const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbolEncoded}`;
+      console.log("Request URL:", url);
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.error("API Error:", res.statusText);
+        return;
+      }
+      const data = await res.json();
+      console.log("API Response:", data);
+
+      marketData[symbol].price = parseFloat(data.lastPrice);
+      marketData[symbol].change = parseFloat(data.priceChangePercent);
+    } catch (e) {
+      console.error("Ticker error:", e);
+    }
+  }
+
+  // Load candlestick data for the selected symbol
+  async function loadCandles(symbol) {
+    try {
+      const symbolEncoded = encodeURIComponent(symbol);
+      const url = `https://api.binance.com/api/v1/klines?symbol=${symbolEncoded}&interval=15m`;
+      const res = await fetch(url);
+      const data = await res.json();
+      candles.value = data.map(candle => ({
+        time: new Date(candle[0]),
+        open: parseFloat(candle[1]),
+        high: parseFloat(candle[2]),
+        low: parseFloat(candle[3]),
+        close: parseFloat(candle[4]),
+        volume: parseFloat(candle[5]),
+        closeTime: new Date(candle[6]),
+        quoteAssetVolume: parseFloat(candle[7]),
+        numberOfTrades: parseInt(candle[8]),
+        takerBuyBaseAssetVolume: parseFloat(candle[9]),
+        takerBuyQuoteAssetVolume: parseFloat(candle[10])
+      }));
+    } catch (e) {
+      console.error("Candle data error:", e);
+    }
+  }
+
+  // Initialize chart when component mounts
+  onMounted(() => {
+    loadCandles(symbol.value);
+    updateTickers(symbol.value);
   });
 </script>
 

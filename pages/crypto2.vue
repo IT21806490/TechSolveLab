@@ -540,14 +540,19 @@
       console.log("Raw Candlestick Data:", data);
 
       if (data && Array.isArray(data)) {
+        // Process the data to map it to the structure needed for charting
         candles.value = data.map(candle => ({
-          time: new Date(candle[0]),
-          open: parseFloat(candle[1]),
-          high: parseFloat(candle[2]),
-          low: parseFloat(candle[3]),
-          close: parseFloat(candle[4]),
-          volume: parseFloat(candle[5]),
+          time: new Date(candle[0]),  // Timestamp
+          open: parseFloat(candle[1]),  // Open price
+          high: parseFloat(candle[2]),  // High price
+          low: parseFloat(candle[3]),   // Low price
+          close: parseFloat(candle[4]), // Close price
+          volume: parseFloat(candle[5]) // Volume
         }));
+
+        // Ensure the processed data is plain objects, not Vue Proxy
+        candles.value = [...candles.value];
+
         console.log("Candlestick data loaded:", candles.value);
       } else {
         console.error("Candlestick data is not in expected format:", data);

@@ -474,7 +474,7 @@
 </template>
 
 <script setup>
-  import { ref, onMounted, watch, reactive, computed, nextTick } from "vue";
+  import { ref, onMounted, watch, reactive, nextTick } from "vue";
   import { Chart, registerables } from "chart.js";
   import { CandlestickController, CandlestickElement } from "chartjs-chart-financial";
   import "chartjs-adapter-date-fns";
@@ -494,153 +494,16 @@
 
   const candles = ref([]);
   const trades = ref([]);
-  const netTotalPL = ref(0);
-  const chartCanvas = ref(null);
   const signalStrength = ref(0);
-  const mtfData = ref([]);
-  const mtfAlignment = ref(0);
-  const aiScore = ref(0);
   const aiPredictedPrice = ref(0);
-  const aiModels = ref([]);
-  const currentPosition = ref(null);
-  const nextSignal = ref({ action: 'WAIT', message: 'Analyzing market conditions...', confidence: 0 });
-  const tradePairs = ref([]);
-  const stopLoss = ref(0.025);
-  const takeProfit = ref(0.02);
-  const feePercent = 0.002;
-  const metrics = ref({ sharpeRatio: '0.00', maxDrawdown: '0.00', profitFactor: '0.00', consecutiveWins: 0, consecutiveLosses: 0 });
-
-  let chartInst = null;
-  let dataCache = {};
-
-  const netWinRate = computed(() => {
-    const sells = trades.value.filter(t => t.type === 'SELL' && t.netPL !== undefined);
-    if (!sells.length) return 0;
-    return ((sells.filter(t => t.netPL > 0).length / sells.length) * 100).toFixed(0);
-  });
-
-  const netAvgWin = computed(() => {
-    const wins = trades.value.filter(t => t.type === 'SELL' && t.netPL > 0);
-    if (!wins.length) return '0.00';
-    return (wins.reduce((sum, t) => sum + t.netPL, 0) / wins.length).toFixed(2);
-  });
-
-  const netAvgLoss = computed(() => {
-    const losses = trades.value.filter(t => t.type === 'SELL' && t.netPL < 0);
-    if (!losses.length) return '0.00';
-    return Math.abs(losses.reduce((sum, t) => sum + t.netPL, 0) / losses.length).toFixed(2);
-  });
-
-  const totalTrades = computed(() => trades.value.filter(t => t.type === 'SELL').length);
-
-  // Functions for technical indicators (EMA, RSI, ADX)
-  function calcEMA(data, period) {
-    if (data.length < period) return Array(data.length).fill(data[0]);
-    const k = 2 / (period + 1);
-    let ema = [data[0]];
-    for (let i = 1; i < data.length; i++) {
-      ema.push(data[i] * k + ema[i - 1] * (1 - k));
-    }
-    return ema;
-  }
-
-  function calcRSI(closes, period = 14) {
-    if (closes.length < period + 1) return 50;
-    let gains = 0, losses = 0;
-    for (let i = closes.length - period; i < closes.length; i++) {
-      const change = closes[i] - closes[i - 1];
-      change >= 0 ? gains += change : losses -= change;
-    }
-    const avgGain = gains / period;
-    const avgLoss = losses / period;
-    return avgLoss > 0 ? 100 - (100 / (1 + avgGain / avgLoss)) : 100;
-  }
-
-  function calcADX(highs, lows, closes, period = 14) {
-    if (closes.length < period + 1) return 0;
-    let trSum = 0, plusDM = 0, minusDM = 0;
-    for (let i = closes.length - period; i < closes.length; i++) {
-      const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
-      const pDM = highs[i] - highs[i - 1] > lows[i - 1] - lows[i] && highs[i] - highs[i - 1] > 0 ? highs[i] - highs[i - 1] : 0;
-      const mDM = lows[i - 1] - lows[i] > highs[i] - highs[i - 1] && lows[i - 1] - lows[i] > 0 ? lows[i - 1] - lows[i] : 0;
-      trSum += tr;
-      plusDM += pDM;
-      minusDM += mDM;
-    }
-    const plusDI = (plusDM / trSum) * 100;
-    const minusDI = (minusDM / trSum) * 100;
-    return Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
-  }
-
-  // ==================== ENSEMBLE AI MODELS ====================
-  function polynomialRegression(closes, degree = 2) {
-    const n = Math.min(closes.length, 60);
-    const recent = closes.slice(-n);
-    const maxVal = Math.max(...recent);
-    const normalized = recent.map(v => v / maxVal);
-    const X = [];
-    for (let i = 0; i < n; i++) {
-      const row = [];
-      for (let d = 0; d <= degree; d++) {
-        row.push(Math.pow(i / n, d));
-      }
-      X.push(row);
-    }
-    const Xt = transpose(X);
-    const XtX = matMul(Xt, X);
-    const XtXinv = matInverse(XtX);
-    const Xty = matMulVec(Xt, normalized);
-    const coeffs = matMulVec(XtXinv, Xty);
-    let pred = 0;
-    for (let d = 0; d <= degree; d++) {
-      pred += coeffs[d] * Math.pow(1, d);
-    }
-    return pred * maxVal;
-  }
-
-  function ensembleAIPrediction(closes, highs, lows, volumes) {
-    const current = closes[closes.length - 1];
-    const polyPred = polynomialRegression(closes);
-    const wmaPred = wmaWithMomentum(closes);
-    const meanRevPred = meanReversionModel(closes);
-    const expPred = exponentialSmoothing(closes);
-    const rsi = calcRSI(closes);
-    const adx = calcADX(highs, lows, closes);
-    const avgVol = volumes.slice(-20).reduce((a, b) => a + b) / 20;
-    const currentVol = volumes[volumes.length - 1];
-    const volRatio = currentVol / avgVol;
-    let weights = { poly: 0.3, wma: 0.25, meanRev: 0.25, exp: 0.2 };
-    if (adx > 25) {
-      weights.poly = 0.4;
-      weights.wma = 0.35;
-      weights.meanRev = 0.15;
-      weights.exp = 0.1;
-    } else {
-      weights.poly = 0.2;
-      weights.wma = 0.2;
-      weights.meanRev = 0.4;
-      weights.exp = 0.2;
-    }
-    const ensemblePred = polyPred * weights.poly + wmaPred * weights.wma + meanRevPred * weights.meanRev + expPred * weights.exp;
-    const avgConfidence = aiModels.value.reduce((sum, m) => sum + m.confidence, 0) / 4;
-    aiScore.value = Math.round(avgConfidence);
-    return { predicted: ensemblePred, change: (ensemblePred - current) / current, confidence: avgConfidence };
-  }
-
-  // Watch for symbol changes and update data
-  watch(symbol, async (newSymbol) => {
-    console.log("Selected Symbol:", newSymbol);
-    updateTickers(newSymbol);
-    await nextTick(() => {
-      loadCandles(newSymbol);
-    });
-  });
 
   // Fetch latest market data for the selected symbol
   async function updateTickers(symbol) {
     try {
-      console.log("Fetching ticker data for:", symbol);
+      // Debug: Log symbol and the URL being generated
       const symbolEncoded = encodeURIComponent(symbol);
+      console.log("Encoded symbol:", symbolEncoded);
+
       const url = `https://api.binance.com/api/v3/ticker/24hr?symbol=${symbolEncoded}`;
       console.log("Request URL:", url);
 
@@ -655,7 +518,7 @@
       marketData[symbol].price = parseFloat(data.lastPrice);
       marketData[symbol].change = parseFloat(data.priceChangePercent);
     } catch (e) {
-      console.error("Ticker error:", e);
+      console.error("Error while fetching ticker data:", e);
     }
   }
 
@@ -663,8 +526,15 @@
   async function loadCandles(symbol) {
     try {
       const symbolEncoded = encodeURIComponent(symbol);
+      console.log("Loading candles for symbol:", symbolEncoded);
+
       const url = `https://api.binance.com/api/v1/klines?symbol=${symbolEncoded}&interval=15m`;
       const res = await fetch(url);
+      if (!res.ok) {
+        console.error("Error while fetching candlestick data:", res.statusText);
+        return;
+      }
+
       const data = await res.json();
       candles.value = data.map(candle => ({
         time: new Date(candle[0]),
@@ -673,16 +543,20 @@
         low: parseFloat(candle[3]),
         close: parseFloat(candle[4]),
         volume: parseFloat(candle[5]),
-        closeTime: new Date(candle[6]),
-        quoteAssetVolume: parseFloat(candle[7]),
-        numberOfTrades: parseInt(candle[8]),
-        takerBuyBaseAssetVolume: parseFloat(candle[9]),
-        takerBuyQuoteAssetVolume: parseFloat(candle[10])
       }));
+
+      console.log("Candlestick data loaded:", candles.value);
     } catch (e) {
-      console.error("Candle data error:", e);
+      console.error("Error while fetching candlestick data:", e);
     }
   }
+
+  // Watch for symbol changes and update data
+  watch(symbol, async (newSymbol) => {
+    console.log("Selected Symbol:", newSymbol);
+    await loadCandles(newSymbol);
+    await updateTickers(newSymbol);
+  });
 
   // Initialize chart when component mounts
   onMounted(() => {
@@ -690,7 +564,6 @@
     updateTickers(symbol.value);
   });
 </script>
-
 
 
 <style scoped>

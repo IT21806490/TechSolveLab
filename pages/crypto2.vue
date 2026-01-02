@@ -1,6 +1,17 @@
 <template>
   <div class="min-h-screen bg-gradient-to-br from-[#0a0e27] via-[#0f1419] to-[#0a0e27] text-slate-100 font-mono p-4 md:p-8 relative overflow-hidden">
     
+    <!-- WARNING BANNER -->
+    <div class="mb-4 bg-yellow-500/10 border-2 border-yellow-500/50 rounded-xl p-4 relative z-10">
+      <div class="flex items-center gap-3">
+        <div class="text-3xl">⚠️</div>
+        <div>
+          <div class="text-yellow-400 font-black text-sm uppercase">Educational Tool - Not Financial Advice</div>
+          <div class="text-yellow-200/80 text-xs mt-1">This system analyzes real market data but past performance does not guarantee future results. Always do your own research and never invest more than you can afford to lose.</div>
+        </div>
+      </div>
+    </div>
+
     <!-- Animated background -->
     <div class="fixed inset-0 opacity-[0.02] pointer-events-none">
       <div class="absolute inset-0" style="background-image: linear-gradient(#10b981 1px, transparent 1px), linear-gradient(90deg, #10b981 1px, transparent 1px); background-size: 40px 40px;"></div>
@@ -12,29 +23,30 @@
         <div>
           <h1 class="text-3xl font-black tracking-tight text-white mb-1 flex items-center gap-3">
             <span class="text-emerald-400">█</span>
-            ULTRA-FAST AI TRADING SYSTEM
-            <span class="text-xs bg-gradient-to-r from-emerald-500 to-violet-500 text-white px-2 py-1 rounded">⚡ INSTANT</span>
+            ADVANCED TRADING ANALYZER
+            <span v-if="backtestComplete" class="text-xs bg-gradient-to-r from-emerald-500 to-violet-500 text-white px-2 py-1 rounded">✓ BACKTESTED</span>
+            <span v-else class="text-xs bg-yellow-500 text-black px-2 py-1 rounded animate-pulse">ANALYZING...</span>
           </h1>
-          <p class="text-xs text-slate-500 font-bold tracking-wide uppercase">Ensemble ML • Zero-Lag • Multi-Algorithm • 0.2% Fees</p>
+          <p class="text-xs text-slate-500 font-bold tracking-wide uppercase">Real Technical Analysis • Backtested Strategy • Multi-Indicator Confirmation</p>
         </div>
         
         <!-- Key Metrics -->
         <div class="flex gap-2 flex-wrap">
           <div class="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20 rounded-lg px-3 py-2">
-            <div class="text-[8px] text-emerald-400 font-bold uppercase mb-0.5">Win Rate</div>
-            <div class="text-lg font-black text-emerald-400">{{ netWinRate }}%</div>
+            <div class="text-[8px] text-emerald-400 font-bold uppercase mb-0.5">Win Rate (Backtest)</div>
+            <div class="text-lg font-black text-emerald-400">{{ backtestMetrics.winRate }}%</div>
           </div>
           <div class="bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 border border-cyan-500/20 rounded-lg px-3 py-2">
-            <div class="text-[8px] text-cyan-400 font-bold uppercase mb-0.5">AI Score</div>
-            <div class="text-lg font-black text-cyan-400">{{ aiScore }}%</div>
+            <div class="text-[8px] text-cyan-400 font-bold uppercase mb-0.5">Accuracy</div>
+            <div class="text-lg font-black text-cyan-400">{{ predictionAccuracy }}%</div>
           </div>
           <div class="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border border-violet-500/20 rounded-lg px-3 py-2">
-            <div class="text-[8px] text-violet-400 font-bold uppercase mb-0.5">Sharpe</div>
-            <div class="text-lg font-black text-violet-400">{{ metrics.sharpeRatio }}</div>
+            <div class="text-[8px] text-violet-400 font-bold uppercase mb-0.5">Sharpe Ratio</div>
+            <div class="text-lg font-black text-violet-400">{{ backtestMetrics.sharpeRatio }}</div>
           </div>
           <div class="bg-gradient-to-br from-rose-500/10 to-rose-500/5 border border-rose-500/20 rounded-lg px-3 py-2">
-            <div class="text-[8px] text-rose-400 font-bold uppercase mb-0.5">Max DD</div>
-            <div class="text-lg font-black text-rose-400">{{ metrics.maxDrawdown }}%</div>
+            <div class="text-[8px] text-rose-400 font-bold uppercase mb-0.5">Max Drawdown</div>
+            <div class="text-lg font-black text-rose-400">{{ backtestMetrics.maxDrawdown }}%</div>
           </div>
         </div>
       </div>
@@ -54,34 +66,50 @@
             </span>
           </div>
           
-          <div class="text-xl font-black text-white tracking-tighter mb-2">${{ data.price.toLocaleString() }}</div>
+          <div class="text-xl font-black text-white tracking-tighter mb-2">${{ data.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
           
           <div class="space-y-1">
             <!-- Multi-Timeframe Indicators -->
             <div class="flex items-center gap-1">
               <span class="text-[7px] text-slate-500 font-bold uppercase w-8">MTF:</span>
               <div v-for="tf in ['15m', '1h', '4h']" :key="tf" 
-                :class="data.timeframes[tf] === 'UP' ? 'bg-emerald-500' : data.timeframes[tf] === 'DOWN' ? 'bg-rose-500' : 'bg-slate-600'"
+                :class="data.timeframes[tf] === 'BULLISH' ? 'bg-emerald-500' : data.timeframes[tf] === 'BEARISH' ? 'bg-rose-500' : 'bg-yellow-500'"
                 class="w-3 h-3 rounded flex items-center justify-center">
                 <span class="text-[6px] font-black text-white">{{ tf.charAt(0) }}</span>
               </div>
             </div>
             
-            <!-- AI Prediction -->
+            <!-- Signal Strength -->
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-1">
-                <span class="text-[7px] text-slate-500 font-bold">AI:</span>
-                <div :class="data.aiPrediction > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'"
+                <span class="text-[7px] text-slate-500 font-bold">Signal:</span>
+                <div :class="data.signalStrength > 70 ? 'bg-emerald-500/20 text-emerald-400' : data.signalStrength > 30 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-rose-500/20 text-rose-400'"
                   class="px-1.5 py-0.5 rounded text-[7px] font-black">
-                  {{ data.aiPrediction > 0 ? '+' : '' }}{{ (data.aiPrediction * 100).toFixed(1) }}%
+                  {{ Math.round(data.signalStrength) }}%
                 </div>
               </div>
               <div class="flex items-center gap-1">
-                <div class="w-1 h-1 rounded-full" :class="data.regime === 'TREND' ? 'bg-emerald-500' : 'bg-slate-500'"></div>
-                <span :class="data.regime === 'TREND' ? 'text-emerald-400' : 'text-slate-500'" 
+                <div class="w-1 h-1 rounded-full" :class="data.trend === 'STRONG_UP' ? 'bg-emerald-500' : data.trend === 'WEAK_UP' ? 'bg-emerald-400' : data.trend === 'WEAK_DOWN' ? 'bg-rose-400' : 'bg-rose-500'"></div>
+                <span :class="data.trend.includes('UP') ? 'text-emerald-400' : 'text-rose-400'" 
                   class="text-[7px] font-black">
-                  {{ data.regime }}
+                  {{ data.trend.replace('_', ' ') }}
                 </span>
+              </div>
+            </div>
+            
+            <!-- Real Indicators -->
+            <div class="grid grid-cols-3 gap-1 text-[7px] mt-1">
+              <div class="bg-slate-800/40 rounded px-1 py-0.5">
+                <span class="text-slate-500">RSI:</span>
+                <span :class="data.indicators.rsi > 70 ? 'text-rose-400' : data.indicators.rsi < 30 ? 'text-emerald-400' : 'text-slate-300'" class="font-black ml-0.5">{{ Math.round(data.indicators.rsi) }}</span>
+              </div>
+              <div class="bg-slate-800/40 rounded px-1 py-0.5">
+                <span class="text-slate-500">MACD:</span>
+                <span :class="data.indicators.macdSignal === 'BUY' ? 'text-emerald-400' : data.indicators.macdSignal === 'SELL' ? 'text-rose-400' : 'text-slate-300'" class="font-black ml-0.5">{{ data.indicators.macdSignal }}</span>
+              </div>
+              <div class="bg-slate-800/40 rounded px-1 py-0.5">
+                <span class="text-slate-500">BB:</span>
+                <span :class="data.indicators.bbPosition === 'LOWER' ? 'text-emerald-400' : data.indicators.bbPosition === 'UPPER' ? 'text-rose-400' : 'text-slate-300'" class="font-black ml-0.5">{{ data.indicators.bbPosition }}</span>
               </div>
             </div>
           </div>
@@ -95,55 +123,86 @@
       <!-- Left Column -->
       <div class="xl:col-span-3 space-y-4">
         
-        <!-- Multi-Timeframe Dashboard -->
+        <!-- Trading Signal Panel -->
         <div class="bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl p-4 rounded-xl border border-slate-800/50">
           <div class="flex justify-between items-center mb-3">
-            <h3 class="text-xs font-black text-slate-300 uppercase">Ensemble AI Analysis • {{ symbol }}</h3>
+            <h3 class="text-xs font-black text-slate-300 uppercase">Current Market Analysis • {{ symbol }}</h3>
             <div class="flex items-center gap-2">
-              <div :class="mtfAlignment >= 2 ? 'bg-emerald-500' : 'bg-slate-600'" 
+              <div :class="currentSignal.strength > 70 ? 'bg-emerald-500' : currentSignal.strength > 30 ? 'bg-yellow-500' : 'bg-rose-500'" 
                 class="w-2 h-2 rounded-full animate-pulse"></div>
               <span class="text-[10px] font-bold text-slate-400 uppercase">
-                {{ mtfAlignment === 3 ? 'FULL ALIGN' : mtfAlignment === 2 ? 'PARTIAL' : 'MIXED' }}
+                {{ currentSignal.confidence }}% CONFIDENCE
               </span>
             </div>
           </div>
           
-          <!-- AI Models Grid -->
-          <div class="grid grid-cols-4 gap-2 mb-3">
-            <div v-for="model in aiModels" :key="model.name"
-              class="bg-slate-800/40 rounded-lg p-2 border border-slate-700/50">
-              <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">{{ model.name }}</div>
-              <div class="text-sm font-black" :class="model.signal > 0 ? 'text-emerald-400' : 'text-rose-400'">
-                {{ model.signal > 0 ? '↑' : '↓' }} {{ Math.abs(model.signal).toFixed(1) }}%
+          <!-- Signal Display -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            <!-- Current Signal -->
+            <div :class="currentSignal.action === 'BUY' ? 'border-emerald-500/50 bg-emerald-500/5' : currentSignal.action === 'SELL' ? 'border-rose-500/50 bg-rose-500/5' : 'border-slate-700/50'"
+              class="border-2 rounded-xl p-4">
+              <div class="text-[8px] text-slate-500 font-bold uppercase mb-2">RECOMMENDED ACTION</div>
+              <div :class="currentSignal.action === 'BUY' ? 'text-emerald-400' : currentSignal.action === 'SELL' ? 'text-rose-400' : 'text-slate-400'"
+                class="text-2xl font-black mb-2">
+                {{ currentSignal.action }}
               </div>
-              <div class="text-[7px] text-slate-600 mt-0.5">{{ model.confidence }}% conf</div>
+              <div class="text-[10px] text-slate-400">{{ currentSignal.reason }}</div>
+            </div>
+            
+            <!-- Entry Price -->
+            <div class="border-2 border-slate-700/50 rounded-xl p-4">
+              <div class="text-[8px] text-slate-500 font-bold uppercase mb-2">SUGGESTED ENTRY</div>
+              <div class="text-2xl font-black text-white mb-2 font-mono">
+                ${{ currentSignal.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}
+              </div>
+              <div class="text-[10px] text-slate-400">Current Price</div>
+            </div>
+            
+            <!-- Targets -->
+            <div class="border-2 border-slate-700/50 rounded-xl p-4">
+              <div class="text-[8px] text-slate-500 font-bold uppercase mb-2">TARGETS</div>
+              <div class="space-y-1">
+                <div class="flex justify-between text-[10px]">
+                  <span class="text-emerald-400 font-bold">Take Profit:</span>
+                  <span class="text-white font-mono">${{ currentSignal.takeProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                </div>
+                <div class="flex justify-between text-[10px]">
+                  <span class="text-rose-400 font-bold">Stop Loss:</span>
+                  <span class="text-white font-mono">${{ currentSignal.stopLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                </div>
+                <div class="flex justify-between text-[10px] pt-1 border-t border-slate-700">
+                  <span class="text-violet-400 font-bold">R:R Ratio:</span>
+                  <span class="text-white font-mono">{{ currentSignal.riskReward }}</span>
+                </div>
+              </div>
             </div>
           </div>
           
-          <!-- Multi-Timeframe Data -->
-          <div class="grid grid-cols-3 gap-3 mb-3">
-            <div v-for="(tf, idx) in mtfData" :key="idx"
-              class="bg-slate-800/40 rounded-lg p-3 border border-slate-700/50">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-[10px] font-black text-slate-400">{{ tf.name }}</span>
-                <div :class="tf.trend === 'UP' ? 'bg-emerald-500' : 'bg-rose-500'"
-                  class="w-1.5 h-1.5 rounded-full"></div>
+          <!-- Indicator Confirmations -->
+          <div class="bg-slate-800/40 rounded-lg p-3 mb-3">
+            <div class="text-[8px] text-slate-500 font-bold uppercase mb-2">INDICATOR CONFIRMATIONS</div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <div v-for="indicator in currentSignal.indicators" :key="indicator.name"
+                class="flex items-center gap-2 bg-slate-900/50 rounded p-2">
+                <div :class="indicator.bullish ? 'bg-emerald-500' : 'bg-rose-500'" class="w-2 h-2 rounded-full"></div>
+                <div class="flex-1">
+                  <div class="text-[8px] text-slate-400">{{ indicator.name }}</div>
+                  <div :class="indicator.bullish ? 'text-emerald-400' : 'text-rose-400'" class="text-[10px] font-black">
+                    {{ indicator.signal }}
+                  </div>
+                </div>
               </div>
-              <div class="text-base font-black" :class="tf.trend === 'UP' ? 'text-emerald-400' : 'text-rose-400'">
-                {{ tf.trend }}
-              </div>
-              <div class="text-[8px] text-slate-500 mt-1">RSI: {{ tf.rsi }} • ADX: {{ tf.adx }}</div>
             </div>
           </div>
           
-          <!-- Signal Strength Bar -->
-          <div class="relative h-5 bg-slate-800/50 rounded-lg overflow-hidden border border-slate-700/50">
+          <!-- Signal Strength Meter -->
+          <div class="relative h-6 bg-slate-800/50 rounded-lg overflow-hidden border border-slate-700/50">
             <div class="absolute inset-0 bg-gradient-to-r from-rose-500/30 via-yellow-500/30 to-emerald-500/30"></div>
             <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-rose-500 via-yellow-500 to-emerald-500 transition-all duration-500"
-              :style="{ width: signalStrength + '%' }"></div>
+              :style="{ width: currentSignal.strength + '%' }"></div>
             <div class="absolute inset-0 flex items-center justify-center">
               <span class="text-[10px] font-black text-white drop-shadow-lg">
-                {{ Math.round(signalStrength) }}% SIGNAL • AI: {{ aiScore }}%
+                SIGNAL STRENGTH: {{ Math.round(currentSignal.strength) }}% • {{ currentSignal.strength > 70 ? 'STRONG' : currentSignal.strength > 30 ? 'MODERATE' : 'WEAK' }}
               </span>
             </div>
           </div>
@@ -154,20 +213,11 @@
           <div class="flex justify-between items-center mb-4">
             <h2 class="text-lg font-black text-white">
               {{ symbol }} 
-              <span class="text-emerald-400 text-sm">15M</span>
-              <span v-if="aiPredictedPrice" class="text-violet-400 text-sm ml-2">
-                AI Target: ${{ aiPredictedPrice.toLocaleString() }}
-              </span>
+              <span class="text-emerald-400 text-sm">15M CHART</span>
             </h2>
             <div class="flex gap-2">
               <div class="px-2 py-1 bg-violet-500/10 border border-violet-500/30 rounded text-[8px] text-violet-400 font-bold uppercase">
-                🤖 ENSEMBLE
-              </div>
-              <div class="px-2 py-1 bg-rose-500/10 border border-rose-500/30 rounded text-[8px] text-rose-400 font-bold uppercase">
-                SL: {{ (stopLoss * 100).toFixed(1) }}%
-              </div>
-              <div class="px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded text-[8px] text-emerald-400 font-bold uppercase">
-                TP: {{ (takeProfit * 100).toFixed(1) }}%
+                📊 INDICATORS
               </div>
             </div>
           </div>
@@ -177,293 +227,125 @@
           </div>
         </div>
 
-        <!-- Performance Stats -->
-        <div class="grid grid-cols-4 gap-3">
-          <div class="bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl p-3 rounded-xl border border-slate-800/50">
-            <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Avg Win</div>
-            <div class="text-xl font-black text-emerald-400">${{ netAvgWin }}</div>
+        <!-- Backtest Results -->
+        <div class="bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl p-4 rounded-xl border border-slate-800/50">
+          <h3 class="text-sm font-black text-white uppercase mb-3">📈 Backtest Performance (Last 500 Candles)</h3>
+          
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div class="bg-slate-800/40 rounded-lg p-3">
+              <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Total Trades</div>
+              <div class="text-xl font-black text-white">{{ backtestMetrics.totalTrades }}</div>
+            </div>
+            <div class="bg-slate-800/40 rounded-lg p-3">
+              <div class="text-[8px] text-emerald-500 font-bold uppercase mb-1">Win Rate</div>
+              <div class="text-xl font-black text-emerald-400">{{ backtestMetrics.winRate }}%</div>
+            </div>
+            <div class="bg-slate-800/40 rounded-lg p-3">
+              <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Profit Factor</div>
+              <div class="text-xl font-black text-violet-400">{{ backtestMetrics.profitFactor }}</div>
+            </div>
+            <div class="bg-slate-800/40 rounded-lg p-3">
+              <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Avg Win</div>
+              <div class="text-xl font-black text-emerald-400">${{ backtestMetrics.avgWin }}</div>
+            </div>
+            <div class="bg-slate-800/40 rounded-lg p-3">
+              <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Avg Loss</div>
+              <div class="text-xl font-black text-rose-400">${{ backtestMetrics.avgLoss }}</div>
+            </div>
           </div>
-          <div class="bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl p-3 rounded-xl border border-slate-800/50">
-            <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Avg Loss</div>
-            <div class="text-xl font-black text-rose-400">${{ netAvgLoss }}</div>
-          </div>
-          <div class="bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl p-3 rounded-xl border border-slate-800/50">
-            <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Trades</div>
-            <div class="text-xl font-black text-violet-400">{{ totalTrades }}</div>
-          </div>
-          <div class="bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl p-3 rounded-xl border border-slate-800/50">
-            <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Win Streak</div>
-            <div class="text-xl font-black text-cyan-400">{{ metrics.consecutiveWins }}</div>
+          
+          <div class="mt-3 p-3 rounded-lg" :class="backtestMetrics.totalPL >= 0 ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-rose-500/10 border border-rose-500/30'">
+            <div class="flex justify-between items-center">
+              <div>
+                <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">Total P/L (After Fees)</div>
+                <div :class="backtestMetrics.totalPL >= 0 ? 'text-emerald-400' : 'text-rose-400'" class="text-2xl font-black font-mono">
+                  {{ backtestMetrics.totalPL >= 0 ? '+' : '' }}${{ backtestMetrics.totalPL.toFixed(2) }}
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="text-[8px] text-slate-500 font-bold uppercase mb-1">ROI</div>
+                <div :class="backtestMetrics.totalPL >= 0 ? 'text-emerald-400' : 'text-rose-400'" class="text-2xl font-black font-mono">
+                  {{ backtestMetrics.roi >= 0 ? '+' : '' }}{{ backtestMetrics.roi }}%
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Right Column - Trades -->
+      <!-- Right Column - Trade History -->
       <div class="space-y-4">
         
-        <!-- CURRENT SIGNAL PANEL -->
-        <div class="bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl rounded-xl border border-slate-800/50 overflow-hidden">
-          <div class="p-4 border-b border-slate-800/50 bg-gradient-to-r from-slate-900 to-slate-800">
-            <h3 class="font-black text-sm text-white uppercase tracking-wide mb-1">🎯 CURRENT SIGNAL</h3>
-            <p class="text-[8px] text-slate-500 font-bold uppercase">Live Trading Recommendation</p>
-          </div>
-          
-          <div class="p-5">
-            <!-- Current Position Status -->
-            <div v-if="currentPosition" class="mb-4">
-              <div class="bg-gradient-to-br from-emerald-500/20 to-emerald-500/10 border-2 border-emerald-500/40 rounded-xl p-4">
-                <div class="flex items-center justify-between mb-3">
-                  <div class="flex items-center gap-2">
-                    <div class="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <span class="text-xs font-black text-emerald-400 uppercase">IN POSITION</span>
-                  </div>
-                  <span class="text-[8px] text-emerald-400/80 font-mono">{{ currentPosition.time }}</span>
-                </div>
-                
-                <div class="text-3xl font-black text-white mb-2 font-mono">
-                  ${{ currentPosition.price.toLocaleString() }}
-                </div>
-                
-                <div class="grid grid-cols-2 gap-2 mb-3">
-                  <div class="bg-slate-900/50 rounded p-2">
-                    <div class="text-[7px] text-slate-500 font-bold uppercase mb-1">Current P/L</div>
-                    <div :class="currentPosition.currentPL >= 0 ? 'text-emerald-400' : 'text-rose-400'" 
-                      class="text-sm font-black font-mono">
-                      {{ currentPosition.currentPL >= 0 ? '+' : '' }}${{ currentPosition.currentPL.toFixed(2) }}
-                    </div>
-                  </div>
-                  <div class="bg-slate-900/50 rounded p-2">
-                    <div class="text-[7px] text-slate-500 font-bold uppercase mb-1">% Change</div>
-                    <div :class="currentPosition.currentPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'" 
-                      class="text-sm font-black font-mono">
-                      {{ currentPosition.currentPercent >= 0 ? '+' : '' }}{{ currentPosition.currentPercent.toFixed(2) }}%
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="space-y-1.5">
-                  <div class="flex items-center justify-between text-[8px]">
-                    <span class="text-slate-500 font-bold">Stop Loss:</span>
-                    <span class="text-rose-400 font-black font-mono">${{ currentPosition.stopLoss.toLocaleString() }}</span>
-                  </div>
-                  <div class="flex items-center justify-between text-[8px]">
-                    <span class="text-slate-500 font-bold">Take Profit:</span>
-                    <span class="text-emerald-400 font-black font-mono">${{ currentPosition.takeProfit.toLocaleString() }}</span>
-                  </div>
-                  <div class="flex items-center justify-between text-[8px]">
-                    <span class="text-slate-500 font-bold">Peak Price:</span>
-                    <span class="text-cyan-400 font-black font-mono">${{ currentPosition.peak.toLocaleString() }}</span>
-                  </div>
-                </div>
-                
-                <div class="mt-3 p-2 bg-violet-500/10 rounded border border-violet-500/30">
-                  <div class="text-[7px] text-violet-400 font-bold uppercase mb-1">Signal Strength</div>
-                  <div class="flex items-center gap-2">
-                    <div class="flex-1 h-2 bg-slate-900/50 rounded-full overflow-hidden">
-                      <div class="h-full bg-gradient-to-r from-violet-500 to-emerald-500 transition-all"
-                        :style="{ width: currentPosition.confidence + '%' }"></div>
-                    </div>
-                    <span class="text-[10px] font-black text-violet-400">{{ currentPosition.confidence }}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Next Signal -->
-            <div v-else class="mb-4">
-              <div :class="nextSignal.action === 'BUY' ? 'from-emerald-500/20 to-emerald-500/10 border-emerald-500/40' : nextSignal.action === 'SELL' ? 'from-rose-500/20 to-rose-500/10 border-rose-500/40' : 'from-slate-700/20 to-slate-700/10 border-slate-700/40'"
-                class="bg-gradient-to-br border-2 rounded-xl p-4">
-                
-                <div class="flex items-center justify-between mb-3">
-                  <div class="flex items-center gap-2">
-                    <div :class="[nextSignal.action === 'BUY' ? 'bg-emerald-500' : nextSignal.action === 'SELL' ? 'bg-rose-500' : 'bg-slate-600', nextSignal.action !== 'WAIT' ? 'animate-pulse' : '']" 
-                      class="w-3 h-3 rounded-full"></div>
-                    <span :class="nextSignal.action === 'BUY' ? 'text-emerald-400' : nextSignal.action === 'SELL' ? 'text-rose-400' : 'text-slate-400'" 
-                      class="text-lg font-black uppercase">
-                      {{ nextSignal.action }}
-                    </span>
-                  </div>
-                  <span class="text-[8px] text-slate-500 font-mono">{{ new Date().toLocaleTimeString() }}</span>
-                </div>
-                
-                <div class="text-3xl font-black text-white mb-3 font-mono">
-                  ${{ marketData[symbol].price.toLocaleString() }}
-                </div>
-                
-                <div class="space-y-2 mb-3">
-                  <div class="flex items-center justify-between text-[9px]">
-                    <span class="text-slate-500 font-bold">Signal Strength:</span>
-                    <span :class="signalStrength >= 70 ? 'text-emerald-400' : signalStrength >= 50 ? 'text-yellow-400' : 'text-slate-400'" 
-                      class="font-black">
-                      {{ Math.round(signalStrength) }}%
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between text-[9px]">
-                    <span class="text-slate-500 font-bold">AI Confidence:</span>
-                    <span class="text-violet-400 font-black">{{ aiScore }}%</span>
-                  </div>
-                  <div class="flex items-center justify-between text-[9px]">
-                    <span class="text-slate-500 font-bold">MTF Alignment:</span>
-                    <span :class="mtfAlignment === 3 ? 'text-emerald-400' : 'text-slate-400'" class="font-black">
-                      {{ mtfAlignment }}/3
-                    </span>
-                  </div>
-                  <div class="flex items-center justify-between text-[9px]">
-                    <span class="text-slate-500 font-bold">AI Prediction:</span>
-                    <span :class="marketData[symbol].aiPrediction > 0 ? 'text-emerald-400' : 'text-rose-400'" class="font-black">
-                      {{ marketData[symbol].aiPrediction > 0 ? '+' : '' }}{{ (marketData[symbol].aiPrediction * 100).toFixed(2) }}%
-                    </span>
-                  </div>
-                </div>
-                
-                <div class="p-3 bg-slate-900/50 rounded-lg border border-slate-700/50">
-                  <div class="text-[8px] text-slate-500 font-bold uppercase mb-2">Recommendation</div>
-                  <p class="text-[10px] text-slate-300 leading-relaxed">
-                    {{ nextSignal.message }}
-                  </p>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Quick Stats -->
-            <div class="grid grid-cols-2 gap-2">
-              <div class="bg-slate-800/40 rounded-lg p-2">
-                <div class="text-[7px] text-emerald-400 font-bold uppercase mb-1">Win Rate</div>
-                <div class="text-lg font-black text-emerald-400">{{ netWinRate }}%</div>
-              </div>
-              <div class="bg-slate-800/40 rounded-lg p-2">
-                <div class="text-[7px] text-cyan-400 font-bold uppercase mb-1">Total Trades</div>
-                <div class="text-lg font-black text-cyan-400">{{ totalTrades }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- TRADE HISTORY PANEL -->
+        <!-- Backtest Trade History -->
         <div class="bg-gradient-to-br from-slate-900/90 to-slate-900/50 backdrop-blur-xl rounded-xl border border-slate-800/50 overflow-hidden">
           <div class="p-4 border-b border-slate-800/50">
-            <div class="flex justify-between items-center mb-2">
-              <div>
-                <h3 class="font-black text-xs text-white uppercase">📊 Trade History</h3>
-                <p class="text-[7px] text-slate-500 font-bold uppercase mt-0.5">Past Signals & Results</p>
-              </div>
-              <div class="text-right">
-                <div class="text-[9px] text-emerald-400 font-black">{{ metrics.profitFactor }} PF</div>
-                <div class="text-[7px] text-slate-500 font-bold">Profit Factor</div>
-              </div>
-            </div>
-            
-            <div class="flex items-center justify-between gap-2 p-2 bg-slate-800/40 rounded-lg">
-              <div class="flex items-center gap-1">
-                <div class="flex gap-0.5">
-                  <div v-for="i in Math.min(metrics.consecutiveWins, 5)" :key="'w-'+i" 
-                    class="w-1 h-2 bg-emerald-500 rounded-full"></div>
-                </div>
-                <span class="text-[8px] text-emerald-400 font-bold">{{ metrics.consecutiveWins }}</span>
-              </div>
-              <div class="flex items-center gap-1">
-                <span class="text-[8px] text-rose-400 font-bold">{{ metrics.consecutiveLosses }}</span>
-                <div class="flex gap-0.5">
-                  <div v-for="i in Math.min(metrics.consecutiveLosses, 5)" :key="'l-'+i" 
-                    class="w-1 h-2 bg-rose-500 rounded-full"></div>
-                </div>
-              </div>
-            </div>
+            <h3 class="font-black text-xs text-white uppercase">📜 Recent Backtest Trades</h3>
+            <p class="text-[7px] text-slate-500 font-bold uppercase mt-0.5">Historical Performance</p>
           </div>
           
-          <div class="p-3 space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
-            <div v-for="(pair, i) in tradePairs.slice(0, 10)" :key="i" 
-              class="bg-slate-800/40 rounded-lg border border-slate-700/50 p-3 hover:bg-slate-800/60 transition-all">
+          <div class="p-3 space-y-2 max-h-[600px] overflow-y-auto custom-scrollbar">
+            <div v-for="(trade, i) in backtestTrades.slice(0, 20)" :key="i" 
+              class="bg-slate-800/40 rounded-lg border border-slate-700/50 p-3">
               
-              <!-- Trade Pair Header -->
+              <!-- Trade Header -->
               <div class="flex items-center justify-between mb-2">
                 <div class="flex items-center gap-2">
-                  <div :class="pair.netPL >= 0 ? 'bg-emerald-500' : 'bg-rose-500'" 
+                  <div :class="trade.pl >= 0 ? 'bg-emerald-500' : 'bg-rose-500'" 
                     class="w-2 h-2 rounded-full"></div>
-                  <span :class="pair.netPL >= 0 ? 'text-emerald-400' : 'text-rose-400'" 
+                  <span :class="trade.pl >= 0 ? 'text-emerald-400' : 'text-rose-400'" 
                     class="text-[9px] font-black uppercase">
-                    {{ pair.netPL >= 0 ? 'WIN' : 'LOSS' }}
+                    {{ trade.pl >= 0 ? 'WIN' : 'LOSS' }}
                   </span>
-                  <span v-if="pair.buy.aiBoosted" class="text-[8px] text-violet-400">🤖</span>
+                  <span class="text-[8px] text-violet-400">{{ trade.signals }}</span>
                 </div>
                 <div class="text-[7px] text-slate-600 font-mono">
-                  {{ pair.duration }}
+                  {{ trade.duration }}m
                 </div>
               </div>
               
-              <!-- BUY Signal -->
+              <!-- Entry -->
               <div class="mb-2 pb-2 border-b border-slate-700/30">
                 <div class="flex items-center justify-between mb-1">
-                  <div class="flex items-center gap-2">
-                    <div class="w-1 h-1 bg-emerald-500 rounded-full"></div>
-                    <span class="text-[8px] text-emerald-400 font-bold uppercase">BUY</span>
-                  </div>
-                  <span class="text-[7px] text-slate-500 font-mono">{{ pair.buy.time }}</span>
+                  <span class="text-[8px] text-emerald-400 font-bold uppercase">ENTRY</span>
+                  <span class="text-[7px] text-slate-500 font-mono">{{ trade.entryTime }}</span>
                 </div>
-                <div class="flex items-center justify-between">
-                  <div class="text-sm font-black text-white font-mono">${{ pair.buy.price.toLocaleString() }}</div>
-                  <div class="text-[7px] text-violet-400 font-black">{{ pair.buy.confidence }}% conf</div>
-                </div>
-                <div class="text-[7px] text-slate-500 mt-1">{{ pair.buy.reason }}</div>
+                <div class="text-sm font-black text-white font-mono">${{ trade.entryPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
               </div>
               
-              <!-- SELL Signal -->
+              <!-- Exit -->
               <div class="mb-2">
                 <div class="flex items-center justify-between mb-1">
-                  <div class="flex items-center gap-2">
-                    <div class="w-1 h-1 bg-rose-500 rounded-full"></div>
-                    <span class="text-[8px] text-rose-400 font-bold uppercase">SELL</span>
-                  </div>
-                  <span class="text-[7px] text-slate-500 font-mono">{{ pair.sell.time }}</span>
+                  <span class="text-[8px] text-rose-400 font-bold uppercase">EXIT</span>
+                  <span class="text-[7px] text-slate-500">{{ trade.exitReason }}</span>
                 </div>
-                <div class="flex items-center justify-between">
-                  <div class="text-sm font-black text-white font-mono">${{ pair.sell.price.toLocaleString() }}</div>
-                  <div class="text-[7px] text-slate-500">{{ pair.sell.reason }}</div>
-                </div>
+                <div class="text-sm font-black text-white font-mono">${{ trade.exitPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</div>
               </div>
               
               <!-- Result -->
-              <div :class="pair.netPL >= 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'"
+              <div :class="trade.pl >= 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'"
                 class="p-2 rounded border">
                 <div class="flex items-center justify-between">
                   <div>
                     <div class="text-[7px] text-slate-500 font-bold uppercase mb-0.5">Net P/L</div>
-                    <div :class="pair.netPL >= 0 ? 'text-emerald-400' : 'text-rose-400'" 
+                    <div :class="trade.pl >= 0 ? 'text-emerald-400' : 'text-rose-400'" 
                       class="text-base font-black font-mono">
-                      {{ pair.netPL >= 0 ? '+' : '' }}${{ pair.netPL.toFixed(2) }}
+                      {{ trade.pl >= 0 ? '+' : '' }}${{ trade.pl.toFixed(2) }}
                     </div>
                   </div>
                   <div class="text-right">
                     <div class="text-[7px] text-slate-500 font-bold uppercase mb-0.5">Return</div>
-                    <div :class="pair.returnPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'" 
+                    <div :class="trade.plPercent >= 0 ? 'text-emerald-400' : 'text-rose-400'" 
                       class="text-base font-black font-mono">
-                      {{ pair.returnPercent >= 0 ? '+' : '' }}{{ pair.returnPercent.toFixed(2) }}%
+                      {{ trade.plPercent >= 0 ? '+' : '' }}{{ trade.plPercent.toFixed(2) }}%
                     </div>
                   </div>
-                </div>
-                <div class="text-[7px] text-slate-600 mt-1 font-mono">
-                  Fee: -${{ pair.sell.fees.toFixed(2) }}
                 </div>
               </div>
             </div>
             
-            <div v-if="tradePairs.length === 0" class="text-center py-16">
+            <div v-if="backtestTrades.length === 0" class="text-center py-16">
               <div class="w-10 h-10 border-4 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin mx-auto mb-2"></div>
-              <div class="text-slate-600 text-[9px] font-bold uppercase">Analyzing Markets...</div>
-            </div>
-          </div>
-
-          <div class="p-4 bg-gradient-to-br from-emerald-600 to-violet-600 m-3 rounded-xl relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-            <div class="relative z-10">
-              <div class="text-[8px] text-emerald-100 font-bold mb-1 uppercase flex items-center justify-between">
-                <span>Net P/L (After Fees)</span>
-                <span class="text-white/80">{{ totalTrades }} Trades</span>
-              </div>
-              <div class="text-2xl font-black text-white font-mono">${{ netTotalPL.toFixed(2) }}</div>
-              <div class="text-[7px] text-emerald-100 mt-1 font-bold">
-                ROI: {{ netTotalPL > 0 ? '+' : '' }}{{ (netTotalPL / 10000 * 100).toFixed(2) }}% • AI Boost: {{ aiScore }}%
-              </div>
+              <div class="text-slate-600 text-[9px] font-bold uppercase">Running Backtest...</div>
             </div>
           </div>
         </div>
@@ -473,126 +355,64 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, reactive, computed, nextTick } from 'vue';
+import { ref, onMounted, watch, reactive, computed } from 'vue';
 import { Chart, registerables } from 'chart.js';
 import { CandlestickController, CandlestickElement } from 'chartjs-chart-financial';
 import 'chartjs-adapter-date-fns';
 
 Chart.register(...registerables, CandlestickController, CandlestickElement);
 
+// Configuration
+const INITIAL_CAPITAL = 10000;
+const POSITION_SIZE = 100; // Trade with $100 per position
+const FEE_PERCENT = 0.002; // 0.2% per trade
+const STOP_LOSS_PERCENT = 0.03; // 3% stop loss
+const TAKE_PROFIT_PERCENT = 0.05; // 5% take profit
+
 const symbols = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT'];
 const symbol = ref('BTCUSDT');
 const marketData = reactive({
-  BTCUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
-  ETHUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
-  SOLUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
-  BNBUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 }
+  BTCUSDT: { price: 0, change: 0, trend: 'NEUTRAL', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, signalStrength: 50, indicators: {} },
+  ETHUSDT: { price: 0, change: 0, trend: 'NEUTRAL', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, signalStrength: 50, indicators: {} },
+  SOLUSDT: { price: 0, change: 0, trend: 'NEUTRAL', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, signalStrength: 50, indicators: {} },
+  BNBUSDT: { price: 0, change: 0, trend: 'NEUTRAL', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, signalStrength: 50, indicators: {} }
 });
 
 const candles = ref([]);
-const trades = ref([]);
-const netTotalPL = ref(0);
 const chartCanvas = ref(null);
-const signalStrength = ref(0);
-const mtfData = ref([]);
-const mtfAlignment = ref(0);
-const aiScore = ref(0);
-const aiPredictedPrice = ref(0);
-const aiModels = ref([]);
-const currentPosition = ref(null);
-const nextSignal = ref({ action: 'WAIT', message: 'Analyzing market conditions...', confidence: 0 });
-const tradePairs = ref([]);
-const stopLoss = ref(0.025);
-const takeProfit = ref(0.02);
-const feePercent = 0.002;
-const metrics = ref({ 
-  sharpeRatio: '0.00', 
-  maxDrawdown: '0.00', 
-  profitFactor: '0.00', 
-  consecutiveWins: 0, 
-  consecutiveLosses: 0 
+const backtestComplete = ref(false);
+const backtestTrades = ref([]);
+const backtestMetrics = ref({
+  totalTrades: 0,
+  winRate: 0,
+  profitFactor: 0,
+  sharpeRatio: 0,
+  maxDrawdown: 0,
+  avgWin: 0,
+  avgLoss: 0,
+  totalPL: 0,
+  roi: 0
 });
 
+const currentSignal = ref({
+  action: 'WAIT',
+  reason: 'Analyzing market...',
+  strength: 50,
+  confidence: 0,
+  entryPrice: 0,
+  stopLoss: 0,
+  takeProfit: 0,
+  riskReward: '0:0',
+  indicators: []
+});
+
+const predictionAccuracy = ref(0);
 let chartInst = null;
 
-const netWinRate = computed(() => {
-  const sells = trades.value.filter(t => t.type === 'SELL' && t.netPL !== undefined);
-  if (!sells.length) return 0;
-  return ((sells.filter(t => t.netPL > 0).length / sells.length) * 100).toFixed(0);
-});
+// ==================== TECHNICAL INDICATORS ====================
 
-const netAvgWin = computed(() => {
-  const wins = trades.value.filter(t => t.type === 'SELL' && t.netPL > 0);
-  if (!wins.length) return '0.00';
-  return (wins.reduce((sum, t) => sum + t.netPL, 0) / wins.length).toFixed(2);
-});
-
-const netAvgLoss = computed(() => {
-  const losses = trades.value.filter(t => t.type === 'SELL' && t.netPL < 0);
-  if (!losses.length) return '0.00';
-  return Math.abs(losses.reduce((sum, t) => sum + t.netPL, 0) / losses.length).toFixed(2);
-});
-
-const totalTrades = computed(() => trades.value.filter(t => t.type === 'SELL').length);
-
-// Matrix math helpers
-function transpose(matrix) {
-  return matrix[0].map((_, i) => matrix.map(row => row[i]));
-}
-
-function matMul(a, b) {
-  const result = Array(a.length).fill(0).map(() => Array(b[0].length).fill(0));
-  for (let i = 0; i < a.length; i++) {
-    for (let j = 0; j < b[0].length; j++) {
-      for (let k = 0; k < b.length; k++) {
-        result[i][j] += a[i][k] * b[k][j];
-      }
-    }
-  }
-  return result;
-}
-
-function matMulVec(matrix, vector) {
-  return matrix.map(row => row.reduce((sum, val, i) => sum + val * vector[i], 0));
-}
-
-function matInverse(matrix) {
-  const n = matrix.length;
-  const identity = Array(n).fill(0).map((_, i) => Array(n).fill(0).map((_, j) => i === j ? 1 : 0));
-  const augmented = matrix.map((row, i) => [...row, ...identity[i]]);
-  
-  for (let i = 0; i < n; i++) {
-    let maxRow = i;
-    for (let k = i + 1; k < n; k++) {
-      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
-        maxRow = k;
-      }
-    }
-    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
-    
-    const pivot = augmented[i][i];
-    if (Math.abs(pivot) < 1e-10) continue;
-    
-    for (let j = 0; j < 2 * n; j++) {
-      augmented[i][j] /= pivot;
-    }
-    
-    for (let k = 0; k < n; k++) {
-      if (k !== i) {
-        const factor = augmented[k][i];
-        for (let j = 0; j < 2 * n; j++) {
-          augmented[k][j] -= factor * augmented[i][j];
-        }
-      }
-    }
-  }
-  
-  return augmented.map(row => row.slice(n));
-}
-
-// Technical indicators
 function calcEMA(data, period) {
-  if (data.length < period) return Array(data.length).fill(data[0]);
+  if (data.length < period) return Array(data.length).fill(data[0] || 0);
   const k = 2 / (period + 1);
   const ema = [data[0]];
   for (let i = 1; i < data.length; i++) {
@@ -601,152 +421,386 @@ function calcEMA(data, period) {
   return ema;
 }
 
+function calcSMA(data, period) {
+  const sma = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      sma.push(data[i]);
+    } else {
+      const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+      sma.push(sum / period);
+    }
+  }
+  return sma;
+}
+
 function calcRSI(closes, period = 14) {
   if (closes.length < period + 1) return 50;
-  let gains = 0;
-  let losses = 0;
-  for (let i = closes.length - period; i < closes.length; i++) {
-    const change = closes[i] - closes[i - 1];
-    if (change >= 0) gains += change;
-    else losses -= change;
+  
+  const changes = [];
+  for (let i = 1; i < closes.length; i++) {
+    changes.push(closes[i] - closes[i - 1]);
   }
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  return avgLoss > 0 ? 100 - (100 / (1 + avgGain / avgLoss)) : 100;
+  
+  let avgGain = 0;
+  let avgLoss = 0;
+  
+  for (let i = 0; i < period; i++) {
+    if (changes[i] >= 0) avgGain += changes[i];
+    else avgLoss -= changes[i];
+  }
+  avgGain /= period;
+  avgLoss /= period;
+  
+  for (let i = period; i < changes.length; i++) {
+    if (changes[i] >= 0) {
+      avgGain = (avgGain * (period - 1) + changes[i]) / period;
+      avgLoss = (avgLoss * (period - 1)) / period;
+    } else {
+      avgGain = (avgGain * (period - 1)) / period;
+      avgLoss = (avgLoss * (period - 1) - changes[i]) / period;
+    }
+  }
+  
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+function calcMACD(closes) {
+  const ema12 = calcEMA(closes, 12);
+  const ema26 = calcEMA(closes, 26);
+  const macdLine = ema12.map((val, i) => val - ema26[i]);
+  const signalLine = calcEMA(macdLine, 9);
+  const histogram = macdLine.map((val, i) => val - signalLine[i]);
+  
+  return {
+    macd: macdLine[macdLine.length - 1],
+    signal: signalLine[signalLine.length - 1],
+    histogram: histogram[histogram.length - 1],
+    prevHistogram: histogram[histogram.length - 2]
+  };
+}
+
+function calcBollingerBands(closes, period = 20, stdDev = 2) {
+  const sma = calcSMA(closes, period);
+  const bands = [];
+  
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) {
+      bands.push({ upper: closes[i], middle: closes[i], lower: closes[i] });
+    } else {
+      const slice = closes.slice(i - period + 1, i + 1);
+      const mean = sma[i];
+      const variance = slice.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / period;
+      const std = Math.sqrt(variance);
+      
+      bands.push({
+        upper: mean + (stdDev * std),
+        middle: mean,
+        lower: mean - (stdDev * std)
+      });
+    }
+  }
+  
+  return bands[bands.length - 1];
 }
 
 function calcADX(highs, lows, closes, period = 14) {
   if (closes.length < period + 1) return 0;
-  let trSum = 0;
-  let plusDM = 0;
-  let minusDM = 0;
-  for (let i = closes.length - period; i < closes.length; i++) {
-    const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1]));
-    const pDM = highs[i] - highs[i - 1] > lows[i - 1] - lows[i] && highs[i] - highs[i - 1] > 0 ? highs[i] - highs[i - 1] : 0;
-    const mDM = lows[i - 1] - lows[i] > highs[i] - highs[i - 1] && lows[i - 1] - lows[i] > 0 ? lows[i - 1] - lows[i] : 0;
-    trSum += tr;
-    plusDM += pDM;
-    minusDM += mDM;
-  }
-  const plusDI = (plusDM / trSum) * 100;
-  const minusDI = (minusDM / trSum) * 100;
-  return Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
-}
-
-// AI prediction models
-function polynomialRegression(closes, degree = 2) {
-  const n = Math.min(closes.length, 60);
-  const recent = closes.slice(-n);
-  const maxVal = Math.max(...recent);
-  const normalized = recent.map(v => v / maxVal);
-  const X = [];
-  for (let i = 0; i < n; i++) {
-    const row = [];
-    for (let d = 0; d <= degree; d++) {
-      row.push(Math.pow(i / n, d));
-    }
-    X.push(row);
-  }
-  const Xt = transpose(X);
-  const XtX = matMul(Xt, X);
-  const XtXinv = matInverse(XtX);
-  const Xty = matMulVec(Xt, normalized);
-  const coeffs = matMulVec(XtXinv, Xty);
-  let pred = 0;
-  for (let d = 0; d <= degree; d++) {
-    pred += coeffs[d] * Math.pow(1, d);
-  }
-  return pred * maxVal;
-}
-
-function wmaWithMomentum(closes) {
-  const n = Math.min(closes.length, 20);
-  const weights = Array.from({ length: n }, (_, i) => i + 1);
-  const weightSum = weights.reduce((a, b) => a + b, 0);
-  const wma = closes.slice(-n).reduce((sum, val, i) => sum + val * weights[i], 0) / weightSum;
-  const momentum = closes[closes.length - 1] - closes[closes.length - 10];
-  return wma + momentum * 0.1;
-}
-
-function meanReversionModel(closes) {
-  const n = Math.min(closes.length, 50);
-  const mean = closes.slice(-n).reduce((a, b) => a + b) / n;
-  const current = closes[closes.length - 1];
-  const deviation = current - mean;
-  return current - deviation * 0.3;
-}
-
-function exponentialSmoothing(closes, alpha = 0.3) {
-  let smoothed = closes[0];
+  
+  const tr = [];
+  const plusDM = [];
+  const minusDM = [];
+  
   for (let i = 1; i < closes.length; i++) {
-    smoothed = alpha * closes[i] + (1 - alpha) * smoothed;
+    const high = highs[i];
+    const low = lows[i];
+    const prevHigh = highs[i - 1];
+    const prevLow = lows[i - 1];
+    const prevClose = closes[i - 1];
+    
+    tr.push(Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose)));
+    
+    const upMove = high - prevHigh;
+    const downMove = prevLow - low;
+    
+    plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+    minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
   }
-  const trend = closes[closes.length - 1] - closes[closes.length - 10];
-  return smoothed + trend * 0.1;
+  
+  let smoothedTR = tr.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedPlusDM = plusDM.slice(0, period).reduce((a, b) => a + b, 0);
+  let smoothedMinusDM = minusDM.slice(0, period).reduce((a, b) => a + b, 0);
+  
+  for (let i = period; i < tr.length; i++) {
+    smoothedTR = smoothedTR - (smoothedTR / period) + tr[i];
+    smoothedPlusDM = smoothedPlusDM - (smoothedPlusDM / period) + plusDM[i];
+    smoothedMinusDM = smoothedMinusDM - (smoothedMinusDM / period) + minusDM[i];
+  }
+  
+  const plusDI = (smoothedPlusDM / smoothedTR) * 100;
+  const minusDI = (smoothedMinusDM / smoothedTR) * 100;
+  const dx = (Math.abs(plusDI - minusDI) / (plusDI + minusDI)) * 100;
+  
+  return dx;
 }
 
-function ensembleAIPrediction(closes, highs, lows, volumes) {
-  const current = closes[closes.length - 1];
-  const polyPred = polynomialRegression(closes);
-  const wmaPred = wmaWithMomentum(closes);
-  const meanRevPred = meanReversionModel(closes);
-  const expPred = exponentialSmoothing(closes);
+// ==================== TRADING STRATEGY ====================
+
+function analyzeMarket(candleData, index) {
+  const closes = candleData.slice(0, index + 1).map(c => c.close);
+  const highs = candleData.slice(0, index + 1).map(c => c.high);
+  const lows = candleData.slice(0, index + 1).map(c => c.low);
   
+  if (closes.length < 50) return null;
+  
+  // Calculate indicators
+  const ema9 = calcEMA(closes, 9);
+  const ema21 = calcEMA(closes, 21);
+  const ema50 = calcEMA(closes, 50);
+  const ema200 = calcEMA(closes, 200);
   const rsi = calcRSI(closes);
+  const macd = calcMACD(closes);
+  const bb = calcBollingerBands(closes);
   const adx = calcADX(highs, lows, closes);
-  const avgVol = volumes.slice(-20).reduce((a, b) => a + b) / 20;
-  const currentVol = volumes[volumes.length - 1];
   
-  let weights = { poly: 0.3, wma: 0.25, meanRev: 0.25, exp: 0.2 };
-  if (adx > 25) {
-    weights.poly = 0.4;
-    weights.wma = 0.35;
-    weights.meanRev = 0.15;
-    weights.exp = 0.1;
+  const currentPrice = closes[closes.length - 1];
+  const prevPrice = closes[closes.length - 2];
+  
+  // Signal scoring
+  let bullishSignals = 0;
+  let bearishSignals = 0;
+  let signalStrength = 0;
+  
+  const indicators = [];
+  
+  // 1. EMA Crossover
+  const ema9Val = ema9[ema9.length - 1];
+  const ema21Val = ema21[ema21.length - 1];
+  const ema50Val = ema50[ema50.length - 1];
+  
+  if (ema9Val > ema21Val && ema21Val > ema50Val) {
+    bullishSignals++;
+    indicators.push({ name: 'EMA', signal: 'BULLISH', bullish: true });
+  } else if (ema9Val < ema21Val && ema21Val < ema50Val) {
+    bearishSignals++;
+    indicators.push({ name: 'EMA', signal: 'BEARISH', bullish: false });
   } else {
-    weights.poly = 0.2;
-    weights.wma = 0.2;
-    weights.meanRev = 0.4;
-    weights.exp = 0.2;
+    indicators.push({ name: 'EMA', signal: 'NEUTRAL', bullish: false });
   }
   
-  const ensemblePred = polyPred * weights.poly + wmaPred * weights.wma + meanRevPred * weights.meanRev + expPred * weights.exp;
-  
-  aiModels.value = [
-    { name: 'POLY', signal: ((polyPred - current) / current) * 100, confidence: Math.round(70 + Math.random() * 20) },
-    { name: 'WMA', signal: ((wmaPred - current) / current) * 100, confidence: Math.round(65 + Math.random() * 25) },
-    { name: 'MEAN-REV', signal: ((meanRevPred - current) / current) * 100, confidence: Math.round(60 + Math.random() * 30) },
-    { name: 'EXP', signal: ((expPred - current) / current) * 100, confidence: Math.round(75 + Math.random() * 15) }
-  ];
-  
-  const avgConfidence = aiModels.value.reduce((sum, m) => sum + m.confidence, 0) / 4;
-  aiScore.value = Math.round(avgConfidence);
-  
-  return { predicted: ensemblePred, change: (ensemblePred - current) / current, confidence: avgConfidence };
-}
-
-// Symbol switching
-function switchSymbol(newSymbol) {
-  symbol.value = newSymbol;
-}
-
-// Update market data
-async function updateTickers(sym) {
-  try {
-    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`);
-    const data = await res.json();
-    marketData[sym].price = parseFloat(data.lastPrice);
-    marketData[sym].change = parseFloat(data.priceChangePercent);
-  } catch (e) {
-    console.error('Ticker error:', e);
+  // 2. RSI
+  if (rsi < 30) {
+    bullishSignals++;
+    indicators.push({ name: 'RSI', signal: 'OVERSOLD', bullish: true });
+  } else if (rsi > 70) {
+    bearishSignals++;
+    indicators.push({ name: 'RSI', signal: 'OVERBOUGHT', bullish: false });
+  } else if (rsi >= 40 && rsi <= 60) {
+    indicators.push({ name: 'RSI', signal: 'NEUTRAL', bullish: rsi > 50 });
+  } else {
+    indicators.push({ name: 'RSI', signal: rsi > 50 ? 'BULLISH' : 'BEARISH', bullish: rsi > 50 });
   }
+  
+  // 3. MACD
+  if (macd.histogram > 0 && macd.histogram > macd.prevHistogram) {
+    bullishSignals++;
+    indicators.push({ name: 'MACD', signal: 'BUY', bullish: true });
+  } else if (macd.histogram < 0 && macd.histogram < macd.prevHistogram) {
+    bearishSignals++;
+    indicators.push({ name: 'MACD', signal: 'SELL', bullish: false });
+  } else {
+    indicators.push({ name: 'MACD', signal: 'NEUTRAL', bullish: macd.histogram > 0 });
+  }
+  
+  // 4. Bollinger Bands
+  if (currentPrice < bb.lower) {
+    bullishSignals++;
+    indicators.push({ name: 'BB', signal: 'LOWER', bullish: true });
+  } else if (currentPrice > bb.upper) {
+    bearishSignals++;
+    indicators.push({ name: 'BB', signal: 'UPPER', bullish: false });
+  } else {
+    indicators.push({ name: 'BB', signal: 'MIDDLE', bullish: currentPrice < bb.middle });
+  }
+  
+  // Calculate signal strength
+  const totalSignals = bullishSignals + bearishSignals;
+  if (totalSignals > 0) {
+    signalStrength = (bullishSignals / (bullishSignals + bearishSignals)) * 100;
+  } else {
+    signalStrength = 50;
+  }
+  
+  // Determine action
+  let action = 'WAIT';
+  let reason = 'No clear signal';
+  let confidence = 0;
+  
+  if (bullishSignals >= 3 && adx > 20) {
+    action = 'BUY';
+    reason = `${bullishSignals}/4 bullish indicators confirmed`;
+    confidence = Math.min(95, 50 + (bullishSignals * 15));
+  } else if (bearishSignals >= 3 && adx > 20) {
+    action = 'SELL';
+    reason = `${bearishSignals}/4 bearish indicators confirmed`;
+    confidence = Math.min(95, 50 + (bearishSignals * 15));
+  } else if (bullishSignals >= 2) {
+    action = 'BUY';
+    reason = `Weak buy signal (${bullishSignals}/4 indicators)`;
+    confidence = 40 + (bullishSignals * 10);
+  }
+  
+  return {
+    action,
+    reason,
+    strength: signalStrength,
+    confidence,
+    currentPrice,
+    stopLoss: currentPrice * (1 - STOP_LOSS_PERCENT),
+    takeProfit: currentPrice * (1 + TAKE_PROFIT_PERCENT),
+    rsi,
+    macd,
+    bb,
+    adx,
+    ema9: ema9Val,
+    ema21: ema21Val,
+    ema50: ema50Val,
+    indicators,
+    bullishSignals,
+    bearishSignals
+  };
 }
 
-// Load candlestick data
+// ==================== BACKTESTING ====================
+
+function runBacktest(candleData) {
+  const trades = [];
+  let position = null;
+  let capital = INITIAL_CAPITAL;
+  
+  for (let i = 50; i < candleData.length; i++) {
+    const analysis = analyzeMarket(candleData, i);
+    if (!analysis) continue;
+    
+    const currentCandle = candleData[i];
+    
+    // Check if we have a position
+    if (position) {
+      const currentPrice = currentCandle.close;
+      const plPercent = ((currentPrice - position.entryPrice) / position.entryPrice) * 100;
+      
+      // Check exit conditions
+      let shouldExit = false;
+      let exitReason = '';
+      
+      if (currentPrice <= position.stopLoss) {
+        shouldExit = true;
+        exitReason = 'Stop Loss';
+      } else if (currentPrice >= position.takeProfit) {
+        shouldExit = true;
+        exitReason = 'Take Profit';
+      } else if (analysis.action === 'SELL' && analysis.confidence > 60) {
+        shouldExit = true;
+        exitReason = 'Signal Reversal';
+      } else if (i - position.entryIndex > 100) {
+        shouldExit = true;
+        exitReason = 'Time Stop';
+      }
+      
+      if (shouldExit) {
+        const entryFee = position.entryPrice * FEE_PERCENT * (POSITION_SIZE / position.entryPrice);
+        const exitFee = currentPrice * FEE_PERCENT * (POSITION_SIZE / position.entryPrice);
+        const pl = ((currentPrice - position.entryPrice) * (POSITION_SIZE / position.entryPrice)) - entryFee - exitFee;
+        
+        capital += pl;
+        
+        trades.push({
+          entryPrice: position.entryPrice,
+          exitPrice: currentPrice,
+          entryTime: new Date(position.entryTime).toLocaleTimeString(),
+          exitTime: new Date(currentCandle.time).toLocaleTimeString(),
+          pl: pl,
+          plPercent: plPercent,
+          exitReason: exitReason,
+          signals: `${position.bullishSignals}/4`,
+          duration: i - position.entryIndex
+        });
+        
+        position = null;
+      }
+    } else {
+      // Look for entry
+      if (analysis.action === 'BUY' && analysis.confidence >= 60) {
+        position = {
+          entryPrice: currentCandle.close,
+          entryTime: currentCandle.time,
+          entryIndex: i,
+          stopLoss: analysis.stopLoss,
+          takeProfit: analysis.takeProfit,
+          bullishSignals: analysis.bullishSignals
+        };
+      }
+    }
+  }
+  
+  // Calculate metrics
+  const wins = trades.filter(t => t.pl > 0);
+  const losses = trades.filter(t => t.pl < 0);
+  
+  const totalWin = wins.reduce((sum, t) => sum + t.pl, 0);
+  const totalLoss = Math.abs(losses.reduce((sum, t) => sum + t.pl, 0));
+  
+  const winRate = trades.length > 0 ? ((wins.length / trades.length) * 100).toFixed(1) : 0;
+  const profitFactor = totalLoss > 0 ? (totalWin / totalLoss).toFixed(2) : '0.00';
+  const avgWin = wins.length > 0 ? (totalWin / wins.length).toFixed(2) : '0.00';
+  const avgLoss = losses.length > 0 ? (totalLoss / losses.length).toFixed(2) : '0.00';
+  
+  const totalPL = capital - INITIAL_CAPITAL;
+  const roi = ((totalPL / INITIAL_CAPITAL) * 100).toFixed(2);
+  
+  // Calculate Sharpe Ratio
+  const returns = trades.map(t => (t.pl / POSITION_SIZE) * 100);
+  const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+  const stdDev = Math.sqrt(returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length);
+  const sharpeRatio = stdDev > 0 ? (avgReturn / stdDev).toFixed(2) : '0.00';
+  
+  // Calculate Max Drawdown
+  let peak = INITIAL_CAPITAL;
+  let maxDD = 0;
+  let runningCapital = INITIAL_CAPITAL;
+  
+  trades.forEach(t => {
+    runningCapital += t.pl;
+    if (runningCapital > peak) peak = runningCapital;
+    const dd = ((peak - runningCapital) / peak) * 100;
+    if (dd > maxDD) maxDD = dd;
+  });
+  
+  return {
+    trades: trades.reverse(),
+    metrics: {
+      totalTrades: trades.length,
+      winRate: winRate,
+      profitFactor: profitFactor,
+      sharpeRatio: sharpeRatio,
+      maxDrawdown: maxDD.toFixed(2),
+      avgWin: avgWin,
+      avgLoss: avgLoss,
+      totalPL: totalPL,
+      roi: roi
+    }
+  };
+}
+
+// ==================== DATA LOADING ====================
+
 async function loadCandles(sym) {
   try {
-    const res = await fetch(`https://api.binance.com/api/v1/klines?symbol=${sym}&interval=15m&limit=500`);
+    const res = await fetch(`https://api.binance.com/api/v1/klines?symbol=${sym}&interval=15m&limit=1000`);
     const data = await res.json();
+    
     candles.value = data.map(candle => ({
       time: new Date(candle[0]),
       open: parseFloat(candle[1]),
@@ -756,207 +810,68 @@ async function loadCandles(sym) {
       volume: parseFloat(candle[5])
     }));
     
-    analyzeAndTrade();
+    // Run backtest
+    const backtest = runBacktest(candles.value);
+    backtestTrades.value = backtest.trades;
+    backtestMetrics.value = backtest.metrics;
+    backtestComplete.value = true;
+    
+    // Calculate prediction accuracy (how many of our signals were correct)
+    const correctPredictions = backtest.trades.filter(t => t.pl > 0).length;
+    predictionAccuracy.value = backtest.trades.length > 0 
+      ? Math.round((correctPredictions / backtest.trades.length) * 100) 
+      : 0;
+    
+    // Analyze current market
+    const currentAnalysis = analyzeMarket(candles.value, candles.value.length - 1);
+    if (currentAnalysis) {
+      currentSignal.value = {
+        action: currentAnalysis.action,
+        reason: currentAnalysis.reason,
+        strength: currentAnalysis.strength,
+        confidence: currentAnalysis.confidence,
+        entryPrice: currentAnalysis.currentPrice,
+        stopLoss: currentAnalysis.stopLoss,
+        takeProfit: currentAnalysis.takeProfit,
+        riskReward: `1:${(TAKE_PROFIT_PERCENT / STOP_LOSS_PERCENT).toFixed(1)}`,
+        indicators: currentAnalysis.indicators
+      };
+      
+      // Update market data
+      marketData[sym].signalStrength = currentAnalysis.strength;
+      marketData[sym].trend = currentAnalysis.bullishSignals > currentAnalysis.bearishSignals ? 'STRONG_UP' : 'STRONG_DOWN';
+      marketData[sym].indicators = {
+        rsi: currentAnalysis.rsi,
+        macdSignal: currentAnalysis.macd.histogram > 0 ? 'BUY' : 'SELL',
+        bbPosition: currentAnalysis.currentPrice < currentAnalysis.bb.lower ? 'LOWER' : 
+                    currentAnalysis.currentPrice > currentAnalysis.bb.upper ? 'UPPER' : 'MIDDLE'
+      };
+      
+      // Multi-timeframe (simplified - in real version, would fetch actual data)
+      marketData[sym].timeframes['15m'] = currentAnalysis.bullishSignals >= 2 ? 'BULLISH' : 'BEARISH';
+      marketData[sym].timeframes['1h'] = currentAnalysis.ema9 > currentAnalysis.ema21 ? 'BULLISH' : 'BEARISH';
+      marketData[sym].timeframes['4h'] = currentAnalysis.ema21 > currentAnalysis.ema50 ? 'BULLISH' : 'BEARISH';
+    }
+    
     updateChart();
   } catch (e) {
-    console.error('Candle error:', e);
+    console.error('Error loading candles:', e);
   }
 }
 
-// Trading logic
-function analyzeAndTrade() {
-  if (candles.value.length < 100) return;
-  
-  const closes = candles.value.map(c => c.close);
-  const highs = candles.value.map(c => c.high);
-  const lows = candles.value.map(c => c.low);
-  const volumes = candles.value.map(c => c.volume);
-  
-  const ema9 = calcEMA(closes, 9);
-  const ema21 = calcEMA(closes, 21);
-  const ema50 = calcEMA(closes, 50);
-  const rsi = calcRSI(closes);
-  const adx = calcADX(highs, lows, closes);
-  
-  // Multi-timeframe analysis
-  mtfData.value = [
-    { name: '15M', trend: ema9[ema9.length - 1] > ema21[ema21.length - 1] ? 'UP' : 'DOWN', rsi: Math.round(rsi), adx: Math.round(adx) },
-    { name: '1H', trend: Math.random() > 0.5 ? 'UP' : 'DOWN', rsi: Math.round(40 + Math.random() * 40), adx: Math.round(15 + Math.random() * 30) },
-    { name: '4H', trend: Math.random() > 0.5 ? 'UP' : 'DOWN', rsi: Math.round(40 + Math.random() * 40), adx: Math.round(15 + Math.random() * 30) }
-  ];
-  
-  mtfAlignment.value = mtfData.value.filter(tf => tf.trend === 'UP').length;
-  
-  // Update market regime
-  marketData[symbol.value].regime = adx > 25 ? 'TREND' : 'RANGE';
-  marketData[symbol.value].timeframes['15m'] = mtfData.value[0].trend;
-  marketData[symbol.value].timeframes['1h'] = mtfData.value[1].trend;
-  marketData[symbol.value].timeframes['4h'] = mtfData.value[2].trend;
-  
-  // AI prediction
-  const aiPred = ensembleAIPrediction(closes, highs, lows, volumes);
-  aiPredictedPrice.value = Math.round(aiPred.predicted);
-  marketData[symbol.value].aiPrediction = aiPred.change;
-  
-  // Signal strength calculation
-  let strength = 50;
-  if (ema9[ema9.length - 1] > ema21[ema21.length - 1]) strength += 15;
-  if (ema21[ema21.length - 1] > ema50[ema50.length - 1]) strength += 10;
-  if (rsi > 30 && rsi < 70) strength += 10;
-  if (adx > 25) strength += 15;
-  signalStrength.value = Math.min(100, strength);
-  
-  // Generate trades
-  const currentPrice = closes[closes.length - 1];
-  const prevPrice = closes[closes.length - 2];
-  
-  // Update current position
-  if (currentPosition.value) {
-    currentPosition.value.currentPL = (currentPrice - currentPosition.value.price) * 100 - (currentPrice * feePercent * 100);
-    currentPosition.value.currentPercent = ((currentPrice - currentPosition.value.price) / currentPosition.value.price) * 100;
-    currentPosition.value.peak = Math.max(currentPosition.value.peak, currentPrice);
-    
-    // Check exit conditions
-    const plPercent = (currentPrice - currentPosition.value.price) / currentPosition.value.price;
-    if (plPercent <= -stopLoss.value || plPercent >= takeProfit.value || signalStrength.value < 40) {
-      // Close position
-      const buyFees = currentPosition.value.price * feePercent * 100;
-      const sellFees = currentPrice * feePercent * 100;
-      const pl = (currentPrice - currentPosition.value.price) * 100;
-      const netPL = pl - buyFees - sellFees;
-      
-      const sellTrade = {
-        type: 'SELL',
-        price: currentPrice,
-        time: new Date().toLocaleTimeString(),
-        reason: plPercent >= takeProfit.value ? 'Take Profit' : plPercent <= -stopLoss.value ? 'Stop Loss' : 'Signal Weak',
-        fees: sellFees,
-        netPL: netPL
-      };
-      trades.value.push(sellTrade);
-      
-      // Create trade pair
-      const duration = Math.floor((Date.now() - new Date(currentPosition.value.time).getTime()) / 60000);
-      tradePairs.value.unshift({
-        buy: currentPosition.value,
-        sell: sellTrade,
-        netPL: netPL,
-        returnPercent: (netPL / (currentPosition.value.price * 100)) * 100,
-        duration: `${duration}m`
-      });
-      
-      netTotalPL.value += netPL;
-      currentPosition.value = null;
-      
-      // Update metrics
-      updateMetrics();
-    }
-  } else {
-    // Check entry conditions
-    const bullish = ema9[ema9.length - 1] > ema21[ema21.length - 1] && rsi > 40 && rsi < 70 && signalStrength.value > 60;
-    
-    if (bullish) {
-      const buyFees = currentPrice * feePercent * 100;
-      currentPosition.value = {
-        type: 'BUY',
-        price: currentPrice,
-        time: new Date().toLocaleTimeString(),
-        reason: 'AI Signal + MTF Align',
-        confidence: Math.round(signalStrength.value),
-        aiBoosted: aiScore.value > 70,
-        fees: buyFees,
-        stopLoss: currentPrice * (1 - stopLoss.value),
-        takeProfit: currentPrice * (1 + takeProfit.value),
-        peak: currentPrice,
-        currentPL: 0,
-        currentPercent: 0
-      };
-      trades.value.push(currentPosition.value);
-      
-      nextSignal.value = {
-        action: 'WAIT',
-        message: 'Position opened. Monitoring for exit signal...',
-        confidence: Math.round(signalStrength.value)
-      };
-    } else {
-      // Update next signal
-      if (signalStrength.value > 70) {
-        nextSignal.value = {
-          action: 'BUY',
-          message: 'Strong bullish signal detected. Consider entering long position.',
-          confidence: Math.round(signalStrength.value)
-        };
-      } else if (signalStrength.value < 30) {
-        nextSignal.value = {
-          action: 'SELL',
-          message: 'Weak market conditions. Consider staying out or shorting.',
-          confidence: Math.round(100 - signalStrength.value)
-        };
-      } else {
-        nextSignal.value = {
-          action: 'WAIT',
-          message: 'Market conditions unclear. Waiting for stronger signal...',
-          confidence: Math.round(signalStrength.value)
-        };
-      }
-    }
+async function updateTicker(sym) {
+  try {
+    const res = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${sym}`);
+    const data = await res.json();
+    marketData[sym].price = parseFloat(data.lastPrice);
+    marketData[sym].change = parseFloat(data.priceChangePercent);
+  } catch (e) {
+    console.error('Error updating ticker:', e);
   }
 }
 
-function updateMetrics() {
-  const sellTrades = trades.value.filter(t => t.type === 'SELL');
-  if (!sellTrades.length) return;
-  
-  const wins = sellTrades.filter(t => t.netPL > 0);
-  const losses = sellTrades.filter(t => t.netPL < 0);
-  
-  const totalWin = wins.reduce((sum, t) => sum + t.netPL, 0);
-  const totalLoss = Math.abs(losses.reduce((sum, t) => sum + t.netPL, 0));
-  
-  metrics.value.profitFactor = totalLoss > 0 ? (totalWin / totalLoss).toFixed(2) : '0.00';
-  
-  // Calculate Sharpe ratio (simplified)
-  const returns = sellTrades.map(t => t.netPL);
-  const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const stdDev = Math.sqrt(returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length);
-  metrics.value.sharpeRatio = stdDev > 0 ? (avgReturn / stdDev).toFixed(2) : '0.00';
-  
-  // Max drawdown
-  let peak = 0;
-  let maxDD = 0;
-  let cumulative = 0;
-  sellTrades.forEach(t => {
-    cumulative += t.netPL;
-    if (cumulative > peak) peak = cumulative;
-    const dd = ((peak - cumulative) / Math.abs(peak)) * 100;
-    if (dd > maxDD) maxDD = dd;
-  });
-  metrics.value.maxDrawdown = maxDD.toFixed(2);
-  
-  // Consecutive wins/losses
-  let currentStreak = 0;
-  let maxWinStreak = 0;
-  let maxLossStreak = 0;
-  
-  for (let i = sellTrades.length - 1; i >= 0; i--) {
-    if (sellTrades[i].netPL > 0) {
-      if (currentStreak >= 0) currentStreak++;
-      else currentStreak = 1;
-      maxWinStreak = Math.max(maxWinStreak, currentStreak);
-    } else {
-      if (currentStreak <= 0) currentStreak--;
-      else currentStreak = -1;
-      maxLossStreak = Math.max(maxLossStreak, Math.abs(currentStreak));
-    }
-  }
-  
-  metrics.value.consecutiveWins = currentStreak > 0 ? currentStreak : maxWinStreak;
-  metrics.value.consecutiveLosses = currentStreak < 0 ? Math.abs(currentStreak) : maxLossStreak;
-}
-
-// Chart rendering
 function updateChart() {
-  if (!chartCanvas.value) return;
+  if (!chartCanvas.value || candles.value.length === 0) return;
   
   const ctx = chartCanvas.value.getContext('2d');
   
@@ -964,17 +879,20 @@ function updateChart() {
     chartInst.destroy();
   }
   
-  const chartData = candles.value.slice(-100).map(c => ({
+  const recentCandles = candles.value.slice(-200);
+  const closes = recentCandles.map(c => c.close);
+  const ema9 = calcEMA(closes, 9);
+  const ema21 = calcEMA(closes, 21);
+  const ema50 = calcEMA(closes, 50);
+  const bb = recentCandles.map((c, i) => calcBollingerBands(closes.slice(0, i + 1)));
+  
+  const chartData = recentCandles.map(c => ({
     x: c.time.getTime(),
     o: c.open,
     h: c.high,
     l: c.low,
     c: c.close
   }));
-  
-  const closes = candles.value.slice(-100).map(c => c.close);
-  const ema9 = calcEMA(closes, 9);
-  const ema21 = calcEMA(closes, 21);
   
   chartInst = new Chart(ctx, {
     type: 'candlestick',
@@ -983,7 +901,6 @@ function updateChart() {
         {
           label: symbol.value,
           data: chartData,
-          borderColor: 'rgba(16, 185, 129, 0.8)',
           color: {
             up: 'rgba(16, 185, 129, 0.8)',
             down: 'rgba(244, 63, 94, 0.8)',
@@ -992,7 +909,7 @@ function updateChart() {
         },
         {
           label: 'EMA 9',
-          data: candles.value.slice(-100).map((c, i) => ({ x: c.time.getTime(), y: ema9[ema9.length - 100 + i] })),
+          data: recentCandles.map((c, i) => ({ x: c.time.getTime(), y: ema9[i] })),
           type: 'line',
           borderColor: 'rgba(139, 92, 246, 0.8)',
           borderWidth: 2,
@@ -1001,12 +918,41 @@ function updateChart() {
         },
         {
           label: 'EMA 21',
-          data: candles.value.slice(-100).map((c, i) => ({ x: c.time.getTime(), y: ema21[ema21.length - 100 + i] })),
+          data: recentCandles.map((c, i) => ({ x: c.time.getTime(), y: ema21[i] })),
           type: 'line',
           borderColor: 'rgba(236, 72, 153, 0.8)',
           borderWidth: 2,
           pointRadius: 0,
           fill: false
+        },
+        {
+          label: 'EMA 50',
+          data: recentCandles.map((c, i) => ({ x: c.time.getTime(), y: ema50[i] })),
+          type: 'line',
+          borderColor: 'rgba(251, 191, 36, 0.8)',
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: false
+        },
+        {
+          label: 'BB Upper',
+          data: recentCandles.map((c, i) => ({ x: c.time.getTime(), y: bb[i].upper })),
+          type: 'line',
+          borderColor: 'rgba(148, 163, 184, 0.3)',
+          borderWidth: 1,
+          pointRadius: 0,
+          fill: false,
+          borderDash: [5, 5]
+        },
+        {
+          label: 'BB Lower',
+          data: recentCandles.map((c, i) => ({ x: c.time.getTime(), y: bb[i].lower })),
+          type: 'line',
+          borderColor: 'rgba(148, 163, 184, 0.3)',
+          borderWidth: 1,
+          pointRadius: 0,
+          fill: false,
+          borderDash: [5, 5]
         }
       ]
     },
@@ -1015,71 +961,57 @@ function updateChart() {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          display: false
+          display: true,
+          position: 'top',
+          labels: {
+            color: 'rgba(148, 163, 184, 0.8)',
+            font: { size: 10 }
+          }
         }
       },
       scales: {
         x: {
           type: 'time',
-          time: {
-            unit: 'hour'
-          },
-          grid: {
-            color: 'rgba(148, 163, 184, 0.1)'
-          },
-          ticks: {
-            color: 'rgba(148, 163, 184, 0.6)'
-          }
+          time: { unit: 'hour' },
+          grid: { color: 'rgba(148, 163, 184, 0.1)' },
+          ticks: { color: 'rgba(148, 163, 184, 0.6)' }
         },
         y: {
-          grid: {
-            color: 'rgba(148, 163, 184, 0.1)'
-          },
-          ticks: {
-            color: 'rgba(148, 163, 184, 0.6)'
-          }
+          grid: { color: 'rgba(148, 163, 184, 0.1)' },
+          ticks: { color: 'rgba(148, 163, 184, 0.6)' }
         }
       }
     }
   });
 }
 
-// Watch for symbol changes
-watch(symbol, async (newSymbol) => {
-  await loadCandles(newSymbol);
-  updateTickers(newSymbol);
+function switchSymbol(newSymbol) {
+  symbol.value = newSymbol;
+  backtestComplete.value = false;
+}
+
+watch(symbol, async (newSym) => {
+  await loadCandles(newSym);
+  updateTicker(newSym);
 });
 
-// Initialize
 onMounted(async () => {
   await loadCandles(symbol.value);
   
-  // Update all tickers
-  symbols.forEach(sym => updateTickers(sym));
+  symbols.forEach(sym => updateTicker(sym));
   
-  // Periodic updates
   setInterval(() => {
-    symbols.forEach(sym => updateTickers(sym));
+    symbols.forEach(sym => updateTicker(sym));
     if (candles.value.length > 0) {
       loadCandles(symbol.value);
     }
-  }, 15000);
+  }, 60000);
 });
 </script>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar { 
-  width: 4px; 
-}
-.custom-scrollbar::-webkit-scrollbar-track { 
-  background: rgba(15, 23, 42, 0.5); 
-  border-radius: 10px; 
-}
-.custom-scrollbar::-webkit-scrollbar-thumb { 
-  background: rgba(16, 185, 129, 0.4); 
-  border-radius: 10px; 
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { 
-  background: rgba(16, 185, 129, 0.6); 
-}
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.5); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.4); border-radius: 10px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.6); }
 </style>

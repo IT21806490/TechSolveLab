@@ -474,672 +474,401 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, reactive, computed, nextTick } from "vue";
-import { Chart, registerables } from "chart.js";
-import { CandlestickController, CandlestickElement } from "chartjs-chart-financial";
-import "chartjs-adapter-date-fns";
+  import { ref, onMounted, watch, reactive, computed, nextTick } from "vue";
+  import { Chart, registerables } from "chart.js";
+  import { CandlestickController, CandlestickElement } from "chartjs-chart-financial";
+  import "chartjs-adapter-date-fns";
 
-Chart.register(...registerables, CandlestickController, CandlestickElement);
+  Chart.register(...registerables, CandlestickController, CandlestickElement);
 
-const symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
-const symbol = ref("BTCUSDT");
+  const symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"];
+  const symbol = ref("BTCUSDT");
+  const marketData = reactive({
+    BTCUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
+    ETHUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
+    SOLUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
+    BNBUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 }
+  });
+  
+  const candles = ref([]);
+  const trades = ref([]);
+  const netTotalPL = ref(0);
+  const chartCanvas = ref(null);
+  const signalStrength = ref(0);
+  const mtfData = ref([]);
+  const mtfAlignment = ref(0);
+  const aiScore = ref(0);
+  const aiPredictedPrice = ref(0);
+  const aiModels = ref([]);
+  const currentPosition = ref(null);
+  const nextSignal = ref({ action: 'WAIT', message: 'Analyzing market conditions...', confidence: 0 });
+  const tradePairs = ref([]);
+  const stopLoss = ref(0.025);
+  const takeProfit = ref(0.02);
+  const feePercent = 0.002;
+  const metrics = ref({ sharpeRatio: '0.00', maxDrawdown: '0.00', profitFactor: '0.00', consecutiveWins: 0, consecutiveLosses: 0 });
+  
+  let chartInst = null;
+  let dataCache = {};
 
-const marketData = reactive({
-  BTCUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
-  ETHUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
-  SOLUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 },
-  BNBUSDT: { price: 0, change: 0, regime: 'LOAD', timeframes: { '15m': 'NEUTRAL', '1h': 'NEUTRAL', '4h': 'NEUTRAL' }, aiPrediction: 0 }
-});
+  const netWinRate = computed(() => {
+    const sells = trades.value.filter(t => t.type === 'SELL' && t.netPL !== undefined);
+    if (!sells.length) return 0;
+    return ((sells.filter(t => t.netPL > 0).length / sells.length) * 100).toFixed(0);
+  });
 
-const candles = ref([]);
-const trades = ref([]);
-const netTotalPL = ref(0);
-const chartCanvas = ref(null);
-const signalStrength = ref(0);
-const mtfData = ref([]);
-const mtfAlignment = ref(0);
-const aiScore = ref(0);
-const aiPredictedPrice = ref(0);
-const aiModels = ref([]);
-const currentPosition = ref(null);
-const nextSignal = ref({ action: 'WAIT', message: 'Analyzing market conditions...', confidence: 0 });
-const tradePairs = ref([]);
+  const netAvgWin = computed(() => {
+    const wins = trades.value.filter(t => t.type === 'SELL' && t.netPL > 0);
+    if (!wins.length) return '0.00';
+    return (wins.reduce((sum, t) => sum + t.netPL, 0) / wins.length).toFixed(2);
+  });
 
-const stopLoss = ref(0.025);
-const takeProfit = ref(0.02);
-const feePercent = 0.002;
+  const netAvgLoss = computed(() => {
+    const losses = trades.value.filter(t => t.type === 'SELL' && t.netPL < 0);
+    if (!losses.length) return '0.00';
+    return Math.abs(losses.reduce((sum, t) => sum + t.netPL, 0) / losses.length).toFixed(2);
+  });
 
-const metrics = ref({
-  sharpeRatio: '0.00',
-  maxDrawdown: '0.00',
-  profitFactor: '0.00',
-  consecutiveWins: 0,
-  consecutiveLosses: 0
-});
+  const totalTrades = computed(() => trades.value.filter(t => t.type === 'SELL').length);
 
-let chartInst = null;
-let dataCache = {};
-
-const netWinRate = computed(() => {
-  const sells = trades.value.filter(t => t.type === 'SELL' && t.netPL !== undefined);
-  if (!sells.length) return 0;
-  return ((sells.filter(t => t.netPL > 0).length / sells.length) * 100).toFixed(0);
-});
-
-const netAvgWin = computed(() => {
-  const wins = trades.value.filter(t => t.type === 'SELL' && t.netPL > 0);
-  if (!wins.length) return '0.00';
-  return (wins.reduce((sum, t) => sum + t.netPL, 0) / wins.length).toFixed(2);
-});
-
-const netAvgLoss = computed(() => {
-  const losses = trades.value.filter(t => t.type === 'SELL' && t.netPL < 0);
-  if (!losses.length) return '0.00';
-  return Math.abs(losses.reduce((sum, t) => sum + t.netPL, 0) / losses.length).toFixed(2);
-});
-
-const totalTrades = computed(() => trades.value.filter(t => t.type === 'SELL').length);
-
-// Ultra-fast EMA
-function calcEMA(data, period) {
-  if (data.length < period) return Array(data.length).fill(data[0]);
-  const k = 2 / (period + 1);
-  let ema = [data[0]];
-  for (let i = 1; i < data.length; i++) {
-    ema.push(data[i] * k + ema[i-1] * (1-k));
+  // Ultra-fast EMA function
+  function calcEMA(data, period) {
+    if (data.length < period) return Array(data.length).fill(data[0]);
+    const k = 2 / (period + 1);
+    let ema = [data[0]];
+    for (let i = 1; i < data.length; i++) {
+      ema.push(data[i] * k + ema[i - 1] * (1 - k));
+    }
+    return ema;
   }
-  return ema;
-}
 
-// Fast RSI
-function calcRSI(closes, period = 14) {
-  if (closes.length < period + 1) return 50;
-  let gains = 0, losses = 0;
-  for (let i = closes.length - period; i < closes.length; i++) {
-    const change = closes[i] - closes[i - 1];
-    change >= 0 ? gains += change : losses -= change;
+  // Fast RSI function
+  function calcRSI(closes, period = 14) {
+    if (closes.length < period + 1) return 50;
+    let gains = 0, losses = 0;
+    for (let i = closes.length - period; i < closes.length; i++) {
+      const change = closes[i] - closes[i - 1];
+      change >= 0 ? gains += change : losses -= change;
+    }
+    const avgGain = gains / period;
+    const avgLoss = losses / period;
+    return avgLoss > 0 ? 100 - (100 / (1 + avgGain / avgLoss)) : 100;
   }
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
-  return avgLoss > 0 ? 100 - (100 / (1 + avgGain / avgLoss)) : 100;
-}
 
-// Fast ADX
-function calcADX(highs, lows, closes, period = 14) {
-  if (closes.length < period + 1) return 0;
-  
-  let trSum = 0, plusDM = 0, minusDM = 0;
-  for (let i = closes.length - period; i < closes.length; i++) {
-    const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
-    const pDM = highs[i] - highs[i-1] > lows[i-1] - lows[i] && highs[i] - highs[i-1] > 0 ? highs[i] - highs[i-1] : 0;
-    const mDM = lows[i-1] - lows[i] > highs[i] - highs[i-1] && lows[i-1] - lows[i] > 0 ? lows[i-1] - lows[i] : 0;
-    
-    trSum += tr;
-    plusDM += pDM;
-    minusDM += mDM;
+  // Fast ADX function
+  function calcADX(highs, lows, closes, period = 14) {
+    if (closes.length < period + 1) return 0;
+    let trSum = 0, plusDM = 0, minusDM = 0;
+    for (let i = closes.length - period; i < closes.length; i++) {
+      const tr = Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i-1]), Math.abs(lows[i] - closes[i-1]));
+      const pDM = highs[i] - highs[i-1] > lows[i-1] - lows[i] && highs[i] - highs[i-1] > 0 ? highs[i] - highs[i-1] : 0;
+      const mDM = lows[i-1] - lows[i] > highs[i] - highs[i-1] && lows[i-1] - lows[i] > 0 ? lows[i-1] - lows[i] : 0;
+      trSum += tr;
+      plusDM += pDM;
+      minusDM += mDM;
+    }
+    const plusDI = (plusDM / trSum) * 100;
+    const minusDI = (minusDM / trSum) * 100;
+    return Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
   }
-  
-  const plusDI = (plusDM / trSum) * 100;
-  const minusDI = (minusDM / trSum) * 100;
-  return Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100;
-}
 
-// ==================== ENSEMBLE AI MODELS ====================
-
-// Model 1: Polynomial Regression (trend following)
-function polynomialRegression(closes, degree = 2) {
-  const n = Math.min(closes.length, 60);
-  const recent = closes.slice(-n);
-  
-  // Normalize to prevent overflow
-  const maxVal = Math.max(...recent);
-  const normalized = recent.map(v => v / maxVal);
-  
-  // Build design matrix
-  const X = [];
-  for (let i = 0; i < n; i++) {
-    const row = [];
+  // ==================== ENSEMBLE AI MODELS ====================
+  // Model 1: Polynomial Regression (trend following)
+  function polynomialRegression(closes, degree = 2) {
+    const n = Math.min(closes.length, 60);
+    const recent = closes.slice(-n);
+    const maxVal = Math.max(...recent);
+    const normalized = recent.map(v => v / maxVal);
+    const X = [];
+    for (let i = 0; i < n; i++) {
+      const row = [];
+      for (let d = 0; d <= degree; d++) {
+        row.push(Math.pow(i / n, d));
+      }
+      X.push(row);
+    }
+    const Xt = transpose(X);
+    const XtX = matMul(Xt, X);
+    const XtXinv = matInverse(XtX);
+    const Xty = matMulVec(Xt, normalized);
+    const coeffs = matMulVec(XtXinv, Xty);
+    let pred = 0;
     for (let d = 0; d <= degree; d++) {
-      row.push(Math.pow(i / n, d));
+      pred += coeffs[d] * Math.pow(1, d);
     }
-    X.push(row);
+    return pred * maxVal;
   }
-  
-  // Normal equation: (X^T X)^-1 X^T y
-  const Xt = transpose(X);
-  const XtX = matMul(Xt, X);
-  const XtXinv = matInverse(XtX);
-  const Xty = matMulVec(Xt, normalized);
-  const coeffs = matMulVec(XtXinv, Xty);
-  
-  // Predict next value
-  let pred = 0;
-  for (let d = 0; d <= degree; d++) {
-    pred += coeffs[d] * Math.pow(1, d);
-  }
-  
-  return pred * maxVal;
-}
 
-// Model 2: Weighted Moving Average with momentum
-function wmaWithMomentum(closes) {
-  const n = Math.min(closes.length, 30);
-  const recent = closes.slice(-n);
-  
-  let sum = 0, weightSum = 0;
-  for (let i = 0; i < n; i++) {
-    const weight = (i + 1);
-    sum += recent[i] * weight;
-    weightSum += weight;
-  }
-  const wma = sum / weightSum;
-  
-  // Add momentum
-  const momentum = (recent[n-1] - recent[0]) / n;
-  return wma + momentum * 5;
-}
-
-// Model 3: Mean Reversion with volatility adjustment
-function meanReversionModel(closes) {
-  const n = Math.min(closes.length, 50);
-  const recent = closes.slice(-n);
-  
-  const mean = recent.reduce((a, b) => a + b) / n;
-  const variance = recent.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / n;
-  const stdDev = Math.sqrt(variance);
-  
-  const current = recent[n-1];
-  const zScore = (current - mean) / stdDev;
-  
-  // Predict reversion to mean with volatility adjustment
-  return mean + (current - mean) * 0.7 + (stdDev * 0.3 * (zScore > 0 ? 1 : -1));
-}
-
-// Model 4: Exponential Smoothing with trend
-function exponentialSmoothing(closes, alpha = 0.3, beta = 0.1) {
-  const n = Math.min(closes.length, 40);
-  const recent = closes.slice(-n);
-  
-  let level = recent[0];
-  let trend = 0;
-  
-  for (let i = 1; i < n; i++) {
-    const prevLevel = level;
-    level = alpha * recent[i] + (1 - alpha) * (level + trend);
-    trend = beta * (level - prevLevel) + (1 - beta) * trend;
-  }
-  
-  return level + trend;
-}
-
-// Ensemble AI: Combine all models with confidence weighting
-function ensembleAIPrediction(closes, highs, lows, volumes) {
-  const current = closes[closes.length - 1];
-  
-  // Get predictions from all models
-  const polyPred = polynomialRegression(closes);
-  const wmaPred = wmaWithMomentum(closes);
-  const meanRevPred = meanReversionModel(closes);
-  const expPred = exponentialSmoothing(closes);
-  
-  // Calculate confidence based on market conditions
-  const rsi = calcRSI(closes);
-  const adx = calcADX(highs, lows, closes);
-  const avgVol = volumes.slice(-20).reduce((a, b) => a + b) / 20;
-  const currentVol = volumes[volumes.length - 1];
-  const volRatio = currentVol / avgVol;
-  
-  // Dynamic weighting based on market regime
-  let weights = {
-    poly: 0.3,
-    wma: 0.25,
-    meanRev: 0.25,
-    exp: 0.2
-  };
-  
-  // Adjust weights based on market conditions
-  if (adx > 25) {
-    // Trending market: favor momentum models
-    weights.poly = 0.4;
-    weights.wma = 0.35;
-    weights.meanRev = 0.15;
-    weights.exp = 0.1;
-  } else {
-    // Ranging market: favor mean reversion
-    weights.poly = 0.2;
-    weights.wma = 0.2;
-    weights.meanRev = 0.4;
-    weights.exp = 0.2;
-  }
-  
-  // Weighted ensemble prediction
-  const ensemblePred = 
-    polyPred * weights.poly +
-    wmaPred * weights.wma +
-    meanRevPred * weights.meanRev +
-    expPred * weights.exp;
-  
-  // Calculate individual model signals
-  aiModels.value = [
-    {
-      name: 'POLY',
-      signal: ((polyPred - current) / current) * 100,
-      confidence: Math.min(100, 70 + adx)
-    },
-    {
-      name: 'WMA',
-      signal: ((wmaPred - current) / current) * 100,
-      confidence: Math.min(100, 65 + volRatio * 10)
-    },
-    {
-      name: 'MEAN-REV',
-      signal: ((meanRevPred - current) / current) * 100,
-      confidence: Math.min(100, 60 + (50 - Math.abs(rsi - 50)))
-    },
-    {
-      name: 'EXP',
-      signal: ((expPred - current) / current) * 100,
-      confidence: Math.min(100, 75 + (adx / 2))
+  // Model 2: Weighted Moving Average with momentum
+  function wmaWithMomentum(closes) {
+    const n = Math.min(closes.length, 30);
+    const recent = closes.slice(-n);
+    let sum = 0, weightSum = 0;
+    for (let i = 0; i < n; i++) {
+      const weight = (i + 1);
+      sum += recent[i] * weight;
+      weightSum += weight;
     }
-  ];
-  
-  // Overall AI confidence score
-  const avgConfidence = aiModels.value.reduce((sum, m) => sum + m.confidence, 0) / 4;
-  aiScore.value = Math.round(avgConfidence);
-  
-  return {
-    predicted: ensemblePred,
-    change: (ensemblePred - current) / current,
-    confidence: avgConfidence
-  };
-}
-
-// Matrix operations for polynomial regression
-function transpose(matrix) {
-  return matrix[0].map((_, i) => matrix.map(row => row[i]));
-}
-
-function matMul(a, b) {
-  const result = [];
-  for (let i = 0; i < a.length; i++) {
-    result[i] = [];
-    for (let j = 0; j < b[0].length; j++) {
-      let sum = 0;
-      for (let k = 0; k < a[0].length; k++) {
-        sum += a[i][k] * b[k][j];
-      }
-      result[i][j] = sum;
-    }
+    const wma = sum / weightSum;
+    const momentum = (recent[n-1] - recent[0]) / n;
+    return wma + momentum * 5;
   }
-  return result;
-}
 
-function matMulVec(matrix, vector) {
-  return matrix.map(row => 
-    row.reduce((sum, val, i) => sum + val * vector[i], 0)
-  );
-}
-
-function matInverse(matrix) {
-  const n = matrix.length;
-  const identity = Array(n).fill(0).map((_, i) => 
-    Array(n).fill(0).map((_, j) => i === j ? 1 : 0)
-  );
-  
-  const augmented = matrix.map((row, i) => [...row, ...identity[i]]);
-  
-  // Gaussian elimination
-  for (let i = 0; i < n; i++) {
-    let maxRow = i;
-    for (let k = i + 1; k < n; k++) {
-      if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
-        maxRow = k;
-      }
-    }
-    [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
-    
-    for (let k = i + 1; k < n; k++) {
-      const factor = augmented[k][i] / augmented[i][i];
-      for (let j = i; j < 2 * n; j++) {
-        augmented[k][j] -= factor * augmented[i][j];
-      }
-    }
+  // Model 3: Mean Reversion with volatility adjustment
+  function meanReversionModel(closes) {
+    const n = Math.min(closes.length, 50);
+    const recent = closes.slice(-n);
+    const mean = recent.reduce((a, b) => a + b) / n;
+    const variance = recent.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / n;
+    const stdDev = Math.sqrt(variance);
+    const current = recent[n-1];
+    const zScore = (current - mean) / stdDev;
+    return mean + (current - mean) * 0.7 + (stdDev * 0.3 * (zScore > 0 ? 1 : -1));
   }
-  
-  // Back substitution
-  for (let i = n - 1; i >= 0; i--) {
-    for (let k = i - 1; k >= 0; k--) {
-      const factor = augmented[k][i] / augmented[i][i];
-      for (let j = 0; j < 2 * n; j++) {
-        augmented[k][j] -= factor * augmented[i][j];
-      }
+
+  // Model 4: Exponential Smoothing with trend
+  function exponentialSmoothing(closes, alpha = 0.3, beta = 0.1) {
+    const n = Math.min(closes.length, 40);
+    const recent = closes.slice(-n);
+    let level = recent[0];
+    let trend = 0;
+    for (let i = 1; i < n; i++) {
+      const prevLevel = level;
+      level = alpha * recent[i] + (1 - alpha) * (level + trend);
+      trend = beta * (level - prevLevel) + (1 - beta) * trend;
     }
-    const divisor = augmented[i][i];
-    for (let j = 0; j < 2 * n; j++) {
-      augmented[i][j] /= divisor;
-    }
+    return level + trend;
   }
-  
-  return augmented.map(row => row.slice(n));
-}
 
-// ==================== END OF AI MODELS ====================
+  // Ensemble AI: Combine all models with confidence weighting
+  function ensembleAIPrediction(closes, highs, lows, volumes) {
+    const current = closes[closes.length - 1];
+    const polyPred = polynomialRegression(closes);
+    const wmaPred = wmaWithMomentum(closes);
+    const meanRevPred = meanReversionModel(closes);
+    const expPred = exponentialSmoothing(closes);
 
-// Multi-Timeframe Analysis
-async function analyzeTimeframes() {
-  const timeframes = [
-    { name: '15m', interval: '15m', limit: 200 },
-    { name: '1h', interval: '1h', limit: 200 },
-    { name: '4h', interval: '4h', limit: 200 }
-  ];
-  
-  mtfData.value = [];
-  let aligned = 0;
-  
-  const promises = timeframes.map(async (tf) => {
-    try {
-      const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol.value}&interval=${tf.interval}&limit=${tf.limit}`);
-      const klines = await res.json();
-      
-      const closes = klines.map(k => parseFloat(k[4]));
-      const highs = klines.map(k => parseFloat(k[2]));
-      const lows = klines.map(k => parseFloat(k[3]));
-      
-      const ema200 = calcEMA(closes, 200);
-      const rsi = calcRSI(closes);
-      const adx = calcADX(highs, lows, closes);
-      const trend = closes[closes.length - 1] > ema200[ema200.length - 1] ? 'UP' : 'DOWN';
-      
-      marketData[symbol.value].timeframes[tf.interval] = trend;
-      if (trend === 'UP') aligned++;
-      
-      return { name: tf.name, trend, rsi: Math.round(rsi), adx: Math.round(adx) };
-    } catch (e) {
-      return { name: tf.name, trend: 'NEUTRAL', rsi: 50, adx: 0 };
-    }
-  });
-  
-  mtfData.value = await Promise.all(promises);
-  mtfAlignment.value = aligned;
-  return aligned;
-}
+    const rsi = calcRSI(closes);
+    const adx = calcADX(highs, lows, closes);
+    const avgVol = volumes.slice(-20).reduce((a, b) => a + b) / 20;
+    const currentVol = volumes[volumes.length - 1];
+    const volRatio = currentVol / avgVol;
 
-async function fetchEngine() {
-  try {
-    const cacheKey = `${symbol.value}_15m`;
-    const now = Date.now();
-    
-    if (dataCache[cacheKey] && now - dataCache[cacheKey].time < 60000) {
-      processData(dataCache[cacheKey].data);
-      return;
-    }
-    
-    const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol.value}&interval=15m&limit=500`);
-    const klines = await res.json();
-    
-    dataCache[cacheKey] = { data: klines, time: now };
-    processData(klines);
-    
-  } catch (e) {
-    console.error("API Error", e);
-  }
-}
+    let weights = { poly: 0.3, wma: 0.25, meanRev: 0.25, exp: 0.2 };
 
-async function processData(klines) {
-  const mappedCandles = klines.map(k => ({
-    x: k[0],
-    o: parseFloat(k[1]),
-    h: parseFloat(k[2]),
-    l: parseFloat(k[3]),
-    c: parseFloat(k[4]),
-    v: parseFloat(k[5])
-  }));
-
-  const closes = mappedCandles.map(c => c.c);
-  const highs = mappedCandles.map(c => c.h);
-  const lows = mappedCandles.map(c => c.l);
-  const volumes = mappedCandles.map(c => c.v);
-  
-  marketData[symbol.value].price = closes[closes.length - 1];
-  marketData[symbol.value].change = ((closes[closes.length - 1] - closes[closes.length - 2]) / closes[closes.length - 2]) * 100;
-  
-  const ema200 = calcEMA(closes, 200);
-  const rsi = calcRSI(closes);
-  const adx = calcADX(highs, lows, closes);
-  
-  marketData[symbol.value].regime = adx > 25 ? 'TREND' : 'RANGE';
-  
-  // Ensemble AI prediction
-  const aiPrediction = ensembleAIPrediction(closes, highs, lows, volumes);
-  marketData[symbol.value].aiPrediction = aiPrediction.change;
-  aiPredictedPrice.value = aiPrediction.predicted;
-  
-  candles.value = mappedCandles;
-  
-  const alignment = await analyzeTimeframes();
-  
-  // Calculate signal strength
-  let baseSignal = 0;
-  const isUptrend = closes[closes.length - 1] > ema200[ema200.length - 1];
-  const avgVol = volumes.slice(-50).reduce((a, b) => a + b) / 50;
-  const volRatio = volumes[volumes.length - 1] / avgVol;
-  
-  if (rsi < 35) baseSignal += 25;
-  else if (rsi < 45) baseSignal += 15;
-  if (isUptrend) baseSignal += 20;
-  if (alignment === 3) baseSignal += 20;
-  else if (alignment === 2) baseSignal += 10;
-  if (volRatio > 1.5) baseSignal += 10;
-  
-  // AI boost based on ensemble confidence
-  if (aiPrediction.change > 0.005) {
-    baseSignal += Math.min(20, aiPrediction.confidence / 5);
-  }
-  
-  signalStrength.value = Math.max(0, Math.min(100, baseSignal));
-  
-  runBacktest(closes, ema200, volumes, rsi, highs, lows, adx, aiPrediction);
-}
-
-function runBacktest(closes, ema200, volumes, currentRSI, highs, lows, currentADX, aiPrediction) {
-  trades.value = [];
-  netTotalPL.value = 0;
-  let position = null;
-  let peakPrice = 0;
-
-  const avgVolume = volumes.slice(0, 100).reduce((a, b) => a + b) / 100;
-
-  for (let i = 200; i < closes.length; i++) {
-    const rsi = calcRSI(closes.slice(0, i + 1));
-    const adx = calcADX(highs.slice(0, i + 1), lows.slice(0, i + 1), closes.slice(0, i + 1));
-    
-    if (adx <= 25 && !position) continue;
-    
-    const isUptrend = closes[i] > ema200[i];
-    const price = closes[i];
-    const volRatio = volumes[i] / avgVolume;
-    
-    let buyScore = 0;
-    if (rsi < 35) buyScore += 25;
-    else if (rsi < 45) buyScore += 18;
-    if (isUptrend) buyScore += 20;
-    if (volRatio > 1.4) buyScore += 15;
-    if (mtfAlignment.value === 3) buyScore += 20;
-    
-    const aiBoosted = aiPrediction.change > 0.005;
-    if (aiBoosted) buyScore += Math.min(20, aiPrediction.confidence / 5);
-    
-    if (!position && buyScore >= 70 && adx > 25) {
-      position = { 
-        type: 'BUY', 
-        price: price, 
-        time: new Date(candles.value[i].x).toLocaleTimeString(),
-        reason: aiBoosted ? "AI ENSEMBLE" : "CONFIRMED",
-        confidence: buyScore,
-        aiBoosted
-      };
-      peakPrice = price;
-      trades.value.unshift(position);
-    } 
-    else if (position) {
-      if (price > peakPrice) peakPrice = price;
-      
-      const stopLossPrice = position.price * (1 - stopLoss.value);
-      const trailingExit = peakPrice * (1 - takeProfit.value);
-      
-      if (price <= stopLossPrice || (price <= trailingExit && price > position.price * 1.005) || rsi > 70 || adx <= 25) {
-        const grossPL = price - position.price;
-        const totalFees = (position.price + price) * feePercent;
-        const netPL = grossPL - totalFees;
-        
-        let reason = "PROFIT";
-        if (price <= stopLossPrice) reason = "STOP";
-        else if (rsi > 70) reason = "RSI EXIT";
-        else if (adx <= 25) reason = "REGIME";
-        
-        trades.value.unshift({ 
-          type: 'SELL', 
-          price: price, 
-          grossPL,
-          fees: totalFees,
-          netPL,
-          time: new Date(candles.value[i].x).toLocaleTimeString(),
-          reason,
-          confidence: position.confidence,
-          aiBoosted: position.aiBoosted
-        });
-        
-        netTotalPL.value += netPL;
-        position = null;
-      }
-    }
-  }
-  
-  calculateMetrics();
-  nextTick(() => renderChart());
-}
-
-function calculateMetrics() {
-  const sellTrades = trades.value.filter(t => t.type === 'SELL');
-  if (!sellTrades.length) return;
-
-  const returns = sellTrades.map(t => (t.netPL / (t.price - t.netPL)) * 100);
-  const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const variance = returns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / returns.length;
-  const stdDev = Math.sqrt(variance);
-  metrics.value.sharpeRatio = (stdDev > 0 ? (avgReturn / stdDev).toFixed(2) : '0.00');
-
-  let peak = 0, maxDD = 0, cumPL = 0;
-  sellTrades.forEach(t => {
-    cumPL += t.netPL;
-    if (cumPL > peak) peak = cumPL;
-    const dd = peak > 0 ? ((peak - cumPL) / peak) * 100 : 0;
-    if (dd > maxDD) maxDD = dd;
-  });
-  metrics.value.maxDrawdown = maxDD.toFixed(2);
-
-  const grossProfit = sellTrades.filter(t => t.netPL > 0).reduce((sum, t) => sum + t.netPL, 0);
-  const grossLoss = Math.abs(sellTrades.filter(t => t.netPL < 0).reduce((sum, t) => sum + t.netPL, 0));
-  metrics.value.profitFactor = grossLoss > 0 ? (grossProfit / grossLoss).toFixed(2) : '999';
-
-  let streak = 0, maxWin = 0, maxLoss = 0, lastWin = null;
-  [...sellTrades].reverse().forEach(t => {
-    const isWin = t.netPL > 0;
-    if (lastWin === null || lastWin === isWin) {
-      streak++;
+    if (adx > 25) {
+      weights.poly = 0.4;
+      weights.wma = 0.35;
+      weights.meanRev = 0.15;
+      weights.exp = 0.1;
     } else {
-      if (lastWin) maxWin = Math.max(maxWin, streak);
-      else maxLoss = Math.max(maxLoss, streak);
-      streak = 1;
+      weights.poly = 0.2;
+      weights.wma = 0.2;
+      weights.meanRev = 0.4;
+      weights.exp = 0.2;
     }
-    lastWin = isWin;
-  });
-  if (lastWin) maxWin = Math.max(maxWin, streak);
-  else maxLoss = Math.max(maxLoss, streak);
 
-  metrics.value.consecutiveWins = maxWin;
-  metrics.value.consecutiveLosses = maxLoss;
-}
+    const ensemblePred = polyPred * weights.poly + wmaPred * weights.wma + meanRevPred * weights.meanRev + expPred * weights.exp;
 
-function renderChart() {
-  if (!chartCanvas.value) return;
-  const ctx = chartCanvas.value.getContext("2d");
-  if (chartInst) chartInst.destroy();
-  
-  chartInst = new Chart(ctx, {
-    type: "candlestick",
-    data: {
-      datasets: [{
-        label: symbol.value,
-        data: candles.value,
-        color: { up: '#10b981', down: '#ef4444', unchanged: '#6b7280' },
-        borderColor: { up: '#059669', down: '#dc2626', unchanged: '#4b5563' },
-        borderWidth: 1
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { type: 'time', display: true, grid: { display: false }, ticks: { color: '#64748b', maxTicksLimit: 8 } },
-        y: { position: 'right', grid: { color: 'rgba(100, 116, 139, 0.08)' }, ticks: { color: '#64748b' } }
-      },
-      plugins: { legend: { display: false }, tooltip: { enabled: true } },
-      animation: { duration: 300 }
-    }
-  });
-}
+    aiModels.value = [
+      { name: 'POLY', signal: ((polyPred - current) / current) * 100, confidence: Math.min(100, 70 + adx) },
+      { name: 'WMA', signal: ((wmaPred - current) / current) * 100, confidence: Math.min(100, 65 + volRatio * 10) },
+      { name: 'MEAN-REV', signal: ((meanRevPred - current) / current) * 100, confidence: Math.min(100, 60 + (50 - Math.abs(rsi - 50))) },
+      { name: 'EXP', signal: ((expPred - current) / current) * 100, confidence: Math.min(100, 75 + (adx / 2)) }
+    ];
 
-async function updateTickers() {
-  try {
-    const promises = symbols.map(async (s) => {
-      const r = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${s}`);
-      const d = await r.json();
-      marketData[s].price = parseFloat(d.lastPrice);
-      marketData[s].change = parseFloat(d.priceChangePercent);
-    });
-    await Promise.all(promises);
-    
-    // Update current position P/L if we have one
-    if (currentPosition.value && candles.value.length > 0) {
-      const currentPrice = marketData[symbol.value].price;
-      const currentGrossPL = currentPrice - currentPosition.value.price;
-      const estimatedFees = (currentPosition.value.price + currentPrice) * feePercent;
-      const currentNetPL = currentGrossPL - estimatedFees;
-      
-      currentPosition.value.currentPrice = currentPrice;
-      currentPosition.value.currentPL = currentNetPL;
-      currentPosition.value.currentPercent = (currentNetPL / currentPosition.value.price) * 100;
-      
-      // Update peak if current price is higher
-      if (currentPrice > currentPosition.value.peak) {
-        currentPosition.value.peak = currentPrice;
-      }
-      
-      // Update trailing take profit
-      currentPosition.value.takeProfit = currentPosition.value.peak * (1 - takeProfit.value);
-    }
-  } catch (e) {
-    console.error('Ticker error:', e);
+    const avgConfidence = aiModels.value.reduce((sum, m) => sum + m.confidence, 0) / 4;
+    aiScore.value = Math.round(avgConfidence);
+
+    return { predicted: ensemblePred, change: (ensemblePred - current) / current, confidence: avgConfidence };
   }
-}
 
-function switchSymbol(newSymbol) {
-  if (symbol.value === newSymbol) return;
-  symbol.value = newSymbol;
-  fetchEngine();
-}
+  // Matrix operations for polynomial regression
+  function transpose(matrix) {
+    return matrix[0].map((_, i) => matrix.map(row => row[i]));
+  }
 
-onMounted(async () => {
-  await updateTickers();
-  await fetchEngine();
-  
-  setInterval(updateTickers, 10000);
-  setInterval(fetchEngine, 900000);
-});
+  function matMul(a, b) {
+    const result = [];
+    for (let i = 0; i < a.length; i++) {
+      result[i] = [];
+      for (let j = 0; j < b[0].length; j++) {
+        let sum = 0;
+        for (let k = 0; k < a[0].length; k++) {
+          sum += a[i][k] * b[k][j];
+        }
+        result[i][j] = sum;
+      }
+    }
+    return result;
+  }
 
-watch(symbol, () => fetchEngine());
+  function matMulVec(matrix, vector) {
+    return matrix.map(row => row.reduce((sum, val, i) => sum + val * vector[i], 0));
+  }
+
+  function matInverse(matrix) {
+    const n = matrix.length;
+    const identity = Array(n).fill(0).map((_, i) => Array(n).fill(0).map((_, j) => i === j ? 1 : 0));
+    const augmented = matrix.map((row, i) => [...row, ...identity[i]]);
+    
+    for (let i = 0; i < n; i++) {
+      let maxRow = i;
+      for (let k = i + 1; k < n; k++) {
+        if (Math.abs(augmented[k][i]) > Math.abs(augmented[maxRow][i])) {
+          maxRow = k;
+        }
+      }
+      [augmented[i], augmented[maxRow]] = [augmented[maxRow], augmented[i]];
+      for (let k = i + 1; k < n; k++) {
+        const factor = augmented[k][i] / augmented[i][i];
+        for (let j = i; j < 2 * n; j++) {
+          augmented[k][j] -= factor * augmented[i][j];
+        }
+      }
+    }
+
+    for (let i = n - 1; i >= 0; i--) {
+      for (let k = i - 1; k >= 0; k--) {
+        const factor = augmented[k][i] / augmented[i][i];
+        for (let j = 0; j < 2 * n; j++) {
+          augmented[k][j] -= factor * augmented[i][j];
+        }
+      }
+    }
+
+    return augmented.map(row => row.slice(n));
+  }
+
+  // ==================== END OF AI MODELS ====================
+
+  // Multi-Timeframe Analysis
+  async function analyzeTimeframes() {
+    const timeframes = [
+      { name: '15m', interval: '15m', limit: 200 },
+      { name: '1h', interval: '1h', limit: 200 },
+      { name: '4h', interval: '4h', limit: 200 }
+    ];
+    mtfData.value = [];
+    let aligned = 0;
+
+    const promises = timeframes.map(async (tf) => {
+      try {
+        const symbolEncoded = encodeURIComponent(symbol.value); // Properly encode symbol
+        const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbolEncoded}&interval=${tf.interval}&limit=${tf.limit}`);
+        const klines = await res.json();
+        const closes = klines.map(k => parseFloat(k[4]));
+        const highs = klines.map(k => parseFloat(k[2]));
+        const lows = klines.map(k => parseFloat(k[3]));
+        const ema200 = calcEMA(closes, 200);
+        const rsi = calcRSI(closes);
+        const adx = calcADX(highs, lows, closes);
+        const trend = closes[closes.length - 1] > ema200[ema200.length - 1] ? 'UP' : 'DOWN';
+        marketData[symbol.value].timeframes[tf.interval] = trend;
+        if (trend === 'UP') aligned++;
+        return { name: tf.name, trend, rsi: Math.round(rsi), adx: Math.round(adx) };
+      } catch (e) {
+        return { name: tf.name, trend: 'NEUTRAL', rsi: 50, adx: 0 };
+      }
+    });
+
+    mtfData.value = await Promise.all(promises);
+    mtfAlignment.value = aligned;
+    return aligned;
+  }
+
+  async function fetchEngine() {
+    try {
+      const symbolEncoded = encodeURIComponent(symbol.value); // Properly encode symbol
+      const cacheKey = `${symbolEncoded}_15m`;
+      const now = Date.now();
+      if (dataCache[cacheKey] && now - dataCache[cacheKey].time < 60000) {
+        processData(dataCache[cacheKey].data);
+        return;
+      }
+      const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbolEncoded}&interval=15m&limit=500`);
+      const klines = await res.json();
+      dataCache[cacheKey] = { data: klines, time: now };
+      processData(klines);
+    } catch (e) {
+      console.error("API Error", e);
+    }
+  }
+
+  async function processData(klines) {
+    const mappedCandles = klines.map(k => ({
+      x: k[0],
+      o: parseFloat(k[1]),
+      h: parseFloat(k[2]),
+      l: parseFloat(k[3]),
+      c: parseFloat(k[4]),
+      v: parseFloat(k[5])
+    }));
+
+    const closes = mappedCandles.map(c => c.c);
+    const highs = mappedCandles.map(c => c.h);
+    const lows = mappedCandles.map(c => c.l);
+    const volumes = mappedCandles.map(c => c.v);
+    
+    marketData[symbol.value].price = closes[closes.length - 1];
+    marketData[symbol.value].change = ((closes[closes.length - 1] - closes[closes.length - 2]) / closes[closes.length - 2]) * 100;
+    
+    const ema200 = calcEMA(closes, 200);
+    const rsi = calcRSI(closes);
+    const adx = calcADX(highs, lows, closes);
+    
+    marketData[symbol.value].regime = adx > 25 ? 'TREND' : 'RANGE';
+
+    const aiPrediction = ensembleAIPrediction(closes, highs, lows, volumes);
+    marketData[symbol.value].aiPrediction = aiPrediction.change;
+    aiPredictedPrice.value = aiPrediction.predicted;
+
+    // Update chart
+    updateChart(mappedCandles);
+  }
+
+  function updateChart(candles) {
+    if (!chartInst) {
+      chartInst = new Chart(chartCanvas.value, {
+        type: 'candlestick',
+        data: {
+          datasets: [{
+            label: symbol.value,
+            data: candles
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              type: 'time'
+            },
+            y: {
+              ticks: {
+                callback: (value) => value.toFixed(2)
+              }
+            }
+          }
+        }
+      });
+    } else {
+      chartInst.data.datasets[0].data = candles;
+      chartInst.update();
+    }
+  }
+
+  onMounted(async () => {
+    await fetchEngine();
+    await analyzeTimeframes();
+  });
+
+  watch(symbol, async (newSymbol) => {
+    dataCache = {}; // Clear cache for new symbol
+    await fetchEngine();
+    await analyzeTimeframes();
+  });
 </script>
+
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');

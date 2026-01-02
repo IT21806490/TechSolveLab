@@ -1013,3 +1013,5 @@ watch(symbol, () => {
   background: rgba(16, 185, 129, 0.6);
 }
 </style>
+
+

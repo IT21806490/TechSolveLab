@@ -500,7 +500,6 @@
   // Fetch latest market data for the selected symbol
   async function updateTickers(symbol) {
     try {
-      // Debug: Log symbol and the URL being generated
       const symbolEncoded = encodeURIComponent(symbol);
       console.log("Encoded symbol:", symbolEncoded);
 
@@ -528,24 +527,32 @@
       const symbolEncoded = encodeURIComponent(symbol);
       console.log("Loading candles for symbol:", symbolEncoded);
 
-      const url = `https://api.binance.com/api/v1/klines?symbol=${symbolEncoded}&interval=15m`;
+      const url = `https://api.binance.com/api/v3/klines?symbol=${symbolEncoded}&interval=15m`;
       const res = await fetch(url);
+
       if (!res.ok) {
         console.error("Error while fetching candlestick data:", res.statusText);
         return;
       }
 
+      // Log raw response data before processing
       const data = await res.json();
-      candles.value = data.map(candle => ({
-        time: new Date(candle[0]),
-        open: parseFloat(candle[1]),
-        high: parseFloat(candle[2]),
-        low: parseFloat(candle[3]),
-        close: parseFloat(candle[4]),
-        volume: parseFloat(candle[5]),
-      }));
+      console.log("Raw Candlestick Data:", data);
 
-      console.log("Candlestick data loaded:", candles.value);
+      if (data && Array.isArray(data)) {
+        candles.value = data.map(candle => ({
+          time: new Date(candle[0]),
+          open: parseFloat(candle[1]),
+          high: parseFloat(candle[2]),
+          low: parseFloat(candle[3]),
+          close: parseFloat(candle[4]),
+          volume: parseFloat(candle[5]),
+        }));
+        console.log("Candlestick data loaded:", candles.value);
+      } else {
+        console.error("Candlestick data is not in expected format:", data);
+      }
+
     } catch (e) {
       console.error("Error while fetching candlestick data:", e);
     }

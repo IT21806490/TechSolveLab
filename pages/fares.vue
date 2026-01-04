@@ -275,89 +275,57 @@
             <span>Download fare_attributes.txt</span>
           </button>
         </div>
-
-        <div class="mt-6">
-          <h3 class="text-lg font-semibold text-gray-800 mb-3">Preview: stops.txt (first 10 rows)</h3>
-          <div class="overflow-x-auto rounded-lg border border-gray-200">
-            <pre class="bg-gray-50 p-4 text-xs font-mono overflow-auto max-h-64">{{ previewStops }}</pre>
-          </div>
-        </div>
-
-        <button
-          @click="reset"
-          class="w-full mt-4 bg-gray-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-600 transition-all shadow-md hover:shadow-lg"
-        >
-          Reset and Start Over
-        </button>
-      </div>
-
-      <!-- Empty State -->
-      <div v-if="!outputStops && !processing" class="bg-white rounded-lg shadow-lg p-12 text-center">
-        <svg class="w-24 h-24 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-        </svg>
-        <h3 class="text-xl font-semibold text-gray-700 mb-2">
-          Ready to Generate Fare Files
-        </h3>
-        <p class="text-gray-500">
-          Upload your GTFS files to get started
-        </p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import Papa from 'papaparse'
+import { ref } from 'vue'
 
+// Files
 const stopsFile = ref(null)
 const tripsFile = ref(null)
 const stopTimesFile = ref(null)
+
+// Config
+const singleStage = ref(false)
+const fareId = ref('FARE_NORMAL')
+const fareAmount = ref(50.0)
+const currencyType = ref('LKR')
+
+// Processing state
+const processing = ref(false)
+
+// Outputs
 const outputStops = ref('')
 const outputFareRules = ref('')
 const outputFareAttributes = ref('')
-const processing = ref(false)
 
-const singleStage = ref(true)
-const fareId = ref('FARE_NORMAL')
-const fareAmount = ref('50.00')
-const currencyType = ref('LKR')
-
+// Stats
 const routeCount = ref(0)
 const stopCount = ref(0)
 const fareRuleCount = ref(0)
 
-const previewStops = computed(() => {
-  if (!outputStops.value) return ''
-  return outputStops.value.split('\n').slice(0, 11).join('\n')
-})
+// Handlers
+function handleStops(event) { stopsFile.value = event.target.files[0] }
+function handleTrips(event) { tripsFile.value = event.target.files[0] }
+function handleStopTimes(event) { stopTimesFile.value = event.target.files[0] }
 
-// File handlers
-function handleStops(e) { stopsFile.value = e.target.files[0] }
-function handleTrips(e) { tripsFile.value = e.target.files[0] }
-function handleStopTimes(e) { stopTimesFile.value = e.target.files[0] }
-
-// Parse CSV
+// Simple CSV parser
 async function parseCSV(file) {
-  return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      dynamicTyping: false,
-      complete: results => resolve(results.data),
-      error: err => reject(err)
-    })
+  const text = await file.text()
+  const lines = text.split(/\r?\n/).filter(l => l.trim() !== '')
+  const headers = lines[0].split(',')
+  return lines.slice(1).map(line => {
+    const values = line.split(',')
+    return headers.reduce((acc, h, i) => (acc[h] = values[i], acc), {})
   })
 }
 
-// Generate zones and fare_rules
+// Generate zones and fares
 async function generateZonesAndFares() {
-  if (!stopsFile.value || !tripsFile.value || !stopTimesFile.value) {
-    alert('Please upload all 3 required files')
-    return
-  }
-
+  if (!stopsFile.value || !tripsFile.value || !stopTimesFile.value) return
   processing.value = true
 
   try {
@@ -365,156 +333,56 @@ async function generateZonesAndFares() {
     const trips = await parseCSV(tripsFile.value)
     const stopTimes = await parseCSV(stopTimesFile.value)
 
-    // Build route_id -> trip_ids mapping
-    const routeTrips = {}
-    trips.forEach(trip => {
-      const routeId = (trip.route_id || '').trim()
-      if (!routeId) return
-      if (!routeTrips[routeId]) routeTrips[routeId] = []
-      routeTrips[routeId].push((trip.trip_id || '').trim())
-    })
+    // Example: assign zone_id = stop_index + 1
+    stops.forEach((s, i) => s.zone_id = i + 1)
 
-    // Build route_id -> stop_ids mapping with direction detection
-    const routeStops = {}
-    stopTimes.forEach(st => {
-      const tripId = (st.trip_id || '').trim()
-      const stopId = (st.stop_id || '').trim()
-      
-      if (!tripId || !stopId) return
+    // Example: fare_rules and fare_attributes
+    const fareRules = trips.map((t, i) => ({
+      fare_id: fareId.value,
+      route_id: t.route_id,
+      origin_id: stops[0].stop_id,
+      destination_id: stops[stops.length - 1].stop_id
+    }))
 
-      // Find which route this trip belongs to
-      for (const routeId in routeTrips) {
-        if (routeTrips[routeId].includes(tripId)) {
-          if (!routeStops[routeId]) routeStops[routeId] = new Set()
-          routeStops[routeId].add(stopId)
-          break
-        }
-      }
-    })
-
-    // Assign zone_id to stops
-    const stopZoneMap = {}
-    for (const routeId in routeStops) {
-      routeStops[routeId].forEach(stopId => {
-        // Detect direction: if stop_id ends with -R or _R, it's reverse
-        const isReverse = stopId.match(/[-_]R$/i)
-        const direction = isReverse ? 'R' : 'F'
-        
-        if (singleStage.value) {
-          stopZoneMap[stopId] = `${routeId}_${direction}`
-        } else {
-          stopZoneMap[stopId] = `STAGE_${routeId}_${direction}_1`
-        }
-      })
-    }
-
-    // Update stops with zone_id
-    const updatedStops = stops.map(stop => {
-      const stopId = (stop.stop_id || '').trim()
-      return {
-        ...stop,
-        zone_id: stopZoneMap[stopId] || ''
-      }
-    })
-
-    // Generate stops.txt output
-    if (updatedStops.length > 0) {
-      const stopHeaders = Object.keys(updatedStops[0])
-      const stopRows = updatedStops.map(row => 
-        stopHeaders.map(header => {
-          const value = row[header] || ''
-          if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-            return `"${value.replace(/"/g, '""')}"`
-          }
-          return value
-        }).join(',')
-      )
-      outputStops.value = [stopHeaders.join(','), ...stopRows].join('\n')
-    }
-
-    // Generate fare_rules.txt
-    const fareRules = []
-    
-    for (const routeId in routeStops) {
-      const zoneF = `${routeId}_F`
-      fareRules.push({
-        fare_id: fareId.value,
-        route_id: routeId,
-        origin_id: zoneF,
-        destination_id: zoneF
-      })
-      
-      const zoneR = `${routeId}_R`
-      fareRules.push({
-        fare_id: fareId.value,
-        route_id: routeId,
-        origin_id: zoneR,
-        destination_id: zoneR
-      })
-    }
-
-    if (fareRules.length > 0) {
-      const fareHeaders = ['fare_id', 'route_id', 'origin_id', 'destination_id']
-      const fareRows = fareRules.map(rule => 
-        fareHeaders.map(header => rule[header] || '').join(',')
-      )
-      outputFareRules.value = [fareHeaders.join(','), ...fareRows].join('\n')
-    }
-
-    // Generate fare_attributes.txt
     const fareAttributes = [{
       fare_id: fareId.value,
       price: fareAmount.value,
       currency_type: currencyType.value,
-      payment_method: '0',
-      transfers: '0'
+      payment_method: 0,
+      transfers: 0
     }]
 
-    const attrHeaders = ['fare_id', 'price', 'currency_type', 'payment_method', 'transfers']
-    const attrRows = fareAttributes.map(attr => 
-      attrHeaders.map(header => attr[header] || '').join(',')
-    )
-    outputFareAttributes.value = [attrHeaders.join(','), ...attrRows].join('\n')
+    outputStops.value = toCSV(stops)
+    outputFareRules.value = toCSV(fareRules)
+    outputFareAttributes.value = toCSV(fareAttributes)
 
-    // Update stats
-    routeCount.value = Object.keys(routeStops).length
-    stopCount.value = Object.keys(stopZoneMap).length
+    routeCount.value = trips.length
+    stopCount.value = stops.length
     fareRuleCount.value = fareRules.length
 
-  } catch (error) {
-    console.error('Error processing files:', error)
-    alert('Error processing files. Please check console for details.')
+  } catch (e) {
+    alert('Error processing files: ' + e.message)
   } finally {
     processing.value = false
   }
 }
 
-// Download function
+// Convert array of objects to CSV
+function toCSV(arr) {
+  if (!arr.length) return ''
+  const headers = Object.keys(arr[0])
+  const lines = arr.map(r => headers.map(h => r[h]).join(','))
+  return [headers.join(','), ...lines].join('\n')
+}
+
+// Download helper
 function downloadFile(content, filename) {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+  const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
   URL.revokeObjectURL(url)
 }
-
-// Reset function
-function reset() {
-  stopsFile.value = null
-  tripsFile.value = null
-  stopTimesFile.value = null
-  outputStops.value = ''
-  outputFareRules.value = ''
-  outputFareAttributes.value = ''
-  routeCount.value = 0
-  stopCount.value = 0
-  fareRuleCount.value = 0
-  document.querySelectorAll('input[type="file"]').forEach(input => input.value = '')
-}
 </script>
-
-<style scoped>
-/* Tailwind classes handle all styling */
-</style>
